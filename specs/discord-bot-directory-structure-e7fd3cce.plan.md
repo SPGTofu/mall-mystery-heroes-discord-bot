@@ -1,4 +1,5 @@
 <!-- e7fd3cce-d403-4fa7-a742-3faffb43af5d 5a602b8e-26ca-4262-8740-4d2b5c775886 -->
+
 # Discord Bot Directory Structure
 
 ## Root Level Files
@@ -8,7 +9,6 @@
 - `.env` - Environment variables (DISCORD_TOKEN, Firebase config)
 - `.gitignore` - Git ignore rules
 - `README.md` - Project documentation
-- `eslint.config.js` - ESLint configuration
 - `Overview.md` - Project specifications
 
 ## Directory Structure
