@@ -5,7 +5,19 @@
 
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin SDK
+// Get project ID from environment (use same as client SDK)
+const projectId = process.env.REACT_APP_PROJECTID || process.env.FIREBASE_PROJECT_ID || 'demo-project';
+
+// Set project ID environment variables for Firebase Admin SDK
+// This must be set BEFORE initializing the Admin SDK
+process.env.GCLOUD_PROJECT = projectId;
+process.env.GOOGLE_CLOUD_PROJECT = projectId;
+
+// Connect to Firebase emulators (set BEFORE initialization)
+process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8081';
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = 'localhost:9199';
+
+// Initialize Firebase Admin SDK for emulator use
 if (!admin.apps.length) {
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
     ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
@@ -33,12 +45,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const storage = admin.storage();
-
-// Connect to emulators in development
-if (process.env.NODE_ENV === 'development') {
-  process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8081';
-  process.env.FIREBASE_STORAGE_EMULATOR_HOST = 'localhost:9199';
-}
 
 module.exports = {
   admin,

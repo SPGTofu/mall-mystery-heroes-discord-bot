@@ -11,8 +11,17 @@
  * @returns {Promise<Role>}
  */
 async function createRole(guild, name, options = {}) {
-  // TODO: Implement role creation
-  throw new Error('Role creation not yet implemented');
+  try {
+    const roleOptions = {
+      name: name,
+      ...options
+    };
+    const role = await guild.roles.create(roleOptions);
+    return role;
+  } catch (error) {
+    console.error(`Error creating role ${name}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -21,8 +30,12 @@ async function createRole(guild, name, options = {}) {
  * @returns {Promise<void>}
  */
 async function deleteRole(role) {
-  // TODO: Implement role deletion
-  throw new Error('Role deletion not yet implemented');
+  try {
+    await role.delete();
+  } catch (error) {
+    console.error(`Error deleting role ${role.name}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -32,8 +45,12 @@ async function deleteRole(role) {
  * @returns {Promise<void>}
  */
 async function assignRole(member, role) {
-  // TODO: Implement role assignment
-  throw new Error('Role assignment not yet implemented');
+  try {
+    await member.roles.add(role);
+  } catch (error) {
+    console.error(`Error assigning role ${role.name} to ${member.user.tag}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -43,19 +60,31 @@ async function assignRole(member, role) {
  * @returns {Promise<void>}
  */
 async function removeRole(member, role) {
-  // TODO: Implement role removal
-  throw new Error('Role removal not yet implemented');
+  try {
+    await member.roles.remove(role);
+  } catch (error) {
+    console.error(`Error removing role ${role.name} from ${member.user.tag}:`, error);
+    throw error;
+  }
 }
 
 /**
  * Gets or creates a role by name
  * @param {Guild} guild - The Discord guild
  * @param {string} name - Role name
+ * @param {Object} options - Role options
  * @returns {Promise<Role>}
  */
-async function getOrCreateRole(guild, name) {
-  // TODO: Implement get or create role
-  throw new Error('Get or create role not yet implemented');
+async function getOrCreateRole(guild, name, options = {}) {
+  // Try to find existing role
+  const role = guild.roles.cache.find(r => r.name === name);
+  
+  if (role) {
+    return role;
+  }
+  
+  // Create new role if not found
+  return await createRole(guild, name, options);
 }
 
 module.exports = {

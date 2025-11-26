@@ -3,6 +3,8 @@
  * Standardized error handling and error messages
  */
 
+const { MessageFlags } = require('discord.js');
+
 /**
  * Custom error class for game-related errors
  */
@@ -57,9 +59,9 @@ async function handleError(error, interaction) {
   }
 
   if (interaction.replied || interaction.deferred) {
-    await interaction.followUp({ content: message, ephemeral: true });
+    await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
   } else {
-    await interaction.reply({ content: message, ephemeral: true });
+    await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -69,4 +71,5 @@ module.exports = {
   ValidationError,
   handleError,
 };
+
 
