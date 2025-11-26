@@ -15,12 +15,12 @@ client.once(Events.ClientReady, async (readyClient) => {
 	// Register a simple global /ping command for testing
 	try {
 		await readyClient.application.commands.create({
-			name: 'ping',
-			description: 'Replies with Pong!',
+			name: 'johnt',
+			description: 'Replies with johnt!',
 		});
-		console.log('Slash command /ping registered.');
+		console.log('Slash command /johnt registered.');
 	} catch (error) {
-		console.error('Error registering /ping command:', error);
+		console.error('Error registering /johnTest command:', error);
 	}
 });
 
@@ -28,11 +28,11 @@ client.once(Events.ClientReady, async (readyClient) => {
 client.on(Events.InteractionCreate, async (interaction) => {
 	if (!interaction.isChatInputCommand()) return;
 
-	if (interaction.commandName === 'ping') {
+	if (interaction.commandName === 'johnt') {
 		try {
-			await interaction.reply('Pong!');
+			await interaction.reply('johnt!');
 		} catch (error) {
-			console.error('Error handling /ping interaction:', error);
+			console.error('Error handling /johnt interaction:', error);
 		}
 	}
 });
