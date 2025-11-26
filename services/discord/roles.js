@@ -4,6 +4,37 @@
  */
 
 /**
+ * Ensures a guild reference exists
+ * @param {Guild} guild
+ */
+function assertGuild(guild) {
+  if (!guild) {
+    throw new Error('A valid guild reference is required to manage roles.');
+  }
+}
+
+/**
+ * Coerces a role resolvable (Role | string) into a Role instance
+ * @param {Guild} guild
+ * @param {Role|string} roleResolvable
+ * @returns {Role|null}
+ */
+function resolveRole(guild, roleResolvable) {
+  assertGuild(guild);
+
+  if (!roleResolvable) return null;
+  if (typeof roleResolvable === 'string') {
+    return (
+      guild.roles.cache.get(roleResolvable) ||
+      guild.roles.cache.find(role => role.name === roleResolvable) ||
+      null
+    );
+  }
+
+  return roleResolvable;
+}
+
+/**
  * Creates a role in the guild
  * @param {Guild} guild - The Discord guild
  * @param {string} name - Role name
@@ -11,61 +42,75 @@
  * @returns {Promise<Role>}
  */
 async function createRole(guild, name, options = {}) {
-  try {
-    const roleOptions = {
-      name: name,
-      ...options
-    };
-    const role = await guild.roles.create(roleOptions);
-    return role;
-  } catch (error) {
-    console.error(`Error creating role ${name}:`, error);
-    throw error;
+  assertGuild(guild);
+  if (!name) {
+    throw new Error('Role name is required to create a role.');
   }
+
+  const { reason, ...roleData } = options;
+  return guild.roles.create({
+    name,
+    ...roleData,
+    reason: reason || 'Role created via Mall Mystery Heroes bot',
+  });
 }
 
 /**
  * Deletes a role
  * @param {Role} role - The role to delete
+ * @param {string} reason - Optional audit-log reason
  * @returns {Promise<void>}
  */
-async function deleteRole(role) {
-  try {
-    await role.delete();
-  } catch (error) {
-    console.error(`Error deleting role ${role.name}:`, error);
-    throw error;
+async function deleteRole(role, reason = 'Role deleted via Mall Mystery Heroes bot') {
+  if (!role) {
+    throw new Error('A role instance is required to delete a role.');
   }
+
+  if (!role.deletable) {
+    throw new Error(`Role "${role.name}" cannot be deleted by the bot.`);
+  }
+
+  await role.delete(reason);
 }
 
 /**
  * Assigns a role to a member
  * @param {GuildMember} member - The guild member
- * @param {Role} role - The role to assign
- * @returns {Promise<void>}
+ * @param {Role|string} role - The role to assign
+ * @returns {Promise<Role>}
  */
 async function assignRole(member, role) {
-  try {
-    await member.roles.add(role);
-  } catch (error) {
-    console.error(`Error assigning role ${role.name} to ${member.user.tag}:`, error);
-    throw error;
+  if (!member) {
+    throw new Error('A guild member is required to assign a role.');
   }
+
+  const resolvedRole = resolveRole(member.guild, role);
+  if (!resolvedRole) {
+    throw new Error('Unable to find the specified role to assign.');
+  }
+
+  await member.roles.add(resolvedRole);
+  return resolvedRole;
 }
 
 /**
  * Removes a role from a member
  * @param {GuildMember} member - The guild member
- * @param {Role} role - The role to remove
- * @returns {Promise<void>}
+ * @param {Role|string} role - The role to remove
+ * @returns {Promise<Role>}
  */
 async function removeRole(member, role) {
-  try {
-    await member.roles.remove(role);
-  } catch (error) {
-    console.error(`Error removing role ${role.name} from ${member.user.tag}:`, error);
-    throw error;
+  if (!member) {
+    throw new Error('A guild member is required to remove a role.');
   }
+
+  const resolvedRole = resolveRole(member.guild, role);
+  if (!resolvedRole) {
+    throw new Error('Unable to find the specified role to remove.');
+  }
+
+  await member.roles.remove(resolvedRole);
+  return resolvedRole;
 }
 
 /**
@@ -76,15 +121,17 @@ async function removeRole(member, role) {
  * @returns {Promise<Role>}
  */
 async function getOrCreateRole(guild, name, options = {}) {
-  // Try to find existing role
-  const role = guild.roles.cache.find(r => r.name === name);
-  
-  if (role) {
-    return role;
+  assertGuild(guild);
+  if (!name) {
+    throw new Error('Role name is required.');
   }
-  
-  // Create new role if not found
-  return await createRole(guild, name, options);
+
+  const existingRole = guild.roles.cache.find(role => role.name === name);
+  if (existingRole) {
+    return existingRole;
+  }
+
+  return createRole(guild, name, options);
 }
 
 module.exports = {
