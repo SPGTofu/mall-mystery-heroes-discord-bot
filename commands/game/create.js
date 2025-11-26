@@ -3,12 +3,181 @@
  * Creates a new game instance
  */
 
+const { canPerformGMActions } = require('../../utils/permissions');
+const { PermissionError, GameError, handleError } = require('../../utils/errors');
+const { db } = require('../../services/firebase/config');
+const { createChannel, deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
+const { getOrCreateRole, deleteRole } = require('../../services/discord/roles');
+const { createEmbed } = require('../../services/discord/messages');
+const { MessageFlags } = require('discord.js');
+const CHANNELS = require('../../config/channels');
+const ROLES = require('../../config/roles');
+
 module.exports = {
   name: 'create',
   description: 'Create a new game',
   async execute(interaction) {
-    // TODO: Implement game creation logic
-    await interaction.reply('Game creation not yet implemented.');
+    try {
+      // Check GM permissions
+      if (!canPerformGMActions(interaction.member)) {
+        throw new PermissionError('Only Game Masters can create a game.');
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      const guild = interaction.guild;
+      const roomID = guild.id; // Use guild ID as room ID
+
+      // Check if room already exists
+      const roomRef = db.collection('rooms').doc(roomID);
+      const roomSnapshot = await roomRef.get();
+      
+      if (roomSnapshot.exists) {
+        // Room exists, clear existing data
+        await interaction.editReply('Room already exists. Cleaning up and resetting...');
+      } else {
+        // Create new room
+        await interaction.editReply('Creating new game room...');
+        await roomRef.set({
+          isGameActive: false,
+          taskIndex: 0,
+          logs: []
+        });
+      }
+
+      // Remove all channels/categories except general
+      await interaction.editReply('Cleaning up channels...');
+      const channelsToDelete = [];
+      
+      guild.channels.cache.forEach(channel => {
+        // Keep general channel, system channels, and don't delete categories yet
+        const isGeneral = channel.name.toLowerCase() === CHANNELS.GENERAL.toLowerCase() ||
+                         channel.name.toLowerCase().includes('general');
+        const isSystem = channel.type === 2 || channel.type === 13 || channel.type === 15; // Voice, Stage, Forum
+        const isCategory = channel.type === 4;
+        
+        // Only delete text channels that aren't general
+        if (!isGeneral && !isSystem && !isCategory && channel.type === 0) {
+          channelsToDelete.push(channel);
+        }
+      });
+
+      // Delete channels
+      for (const channel of channelsToDelete) {
+        try {
+          await deleteChannel(channel);
+        } catch (error) {
+          console.error(`Error deleting channel ${channel.name}:`, error);
+        }
+      }
+
+      // Delete categories (except if they contain general)
+      const categoriesToDelete = [];
+      guild.channels.cache.forEach(channel => {
+        if (channel.type === 4) { // Category
+          const hasGeneral = channel.children.cache.some(
+            ch => ch.name.toLowerCase() === CHANNELS.GENERAL.toLowerCase()
+          );
+          if (!hasGeneral) {
+            categoriesToDelete.push(channel);
+          }
+        }
+      });
+
+      for (const category of categoriesToDelete) {
+        try {
+          // Delete children first
+          for (const child of category.children.cache.values()) {
+            await deleteChannel(child);
+          }
+          await deleteChannel(category);
+        } catch (error) {
+          console.error(`Error deleting category ${category.name}:`, error);
+        }
+      }
+
+      // Create DMs category
+      await interaction.editReply('Creating DMs category...');
+      const dmCategory = await getOrCreateChannel(guild, CHANNELS.DMS_CATEGORY, { type: 4 });
+
+      // Create Game Masters channel with only GMs and bot
+      await interaction.editReply('Creating Game Masters channel...');
+      
+      // Get or create GM role
+      const gmRole = await getOrCreateRole(guild, ROLES.GAME_MASTER);
+      
+      // Create Game Masters channel with permissions
+      const gameMastersChannel = await getOrCreateChannel(guild, CHANNELS.GAME_MASTERS, {
+        type: 0, // Text channel
+        parent: null, // No category
+        permissionOverwrites: [
+          {
+            id: guild.id, // @everyone
+            deny: ['ViewChannel']
+          },
+          {
+            id: gmRole.id, // Game Masters
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+          },
+          {
+            id: guild.members.me.id, // Bot
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages']
+          }
+        ]
+      });
+
+      // Reset all roles (delete game-specific roles)
+      await interaction.editReply('Resetting roles...');
+      const gameRoles = [ROLES.PLAYER, ROLES.ALIVE, ROLES.DEAD];
+      
+      for (const roleName of gameRoles) {
+        const role = guild.roles.cache.find(r => r.name === roleName);
+        if (role) {
+          try {
+            await deleteRole(role);
+          } catch (error) {
+            console.error(`Error deleting role ${roleName}:`, error);
+          }
+        }
+      }
+
+      // Get or create general channel
+      const generalChannel = await getOrCreateChannel(guild, CHANNELS.GENERAL);
+
+      // Send rules message and pin it
+      await interaction.editReply('Sending rules message...');
+      
+      const rulesMessage = createEmbed({
+        title: '📜 Game Rules',
+        description: `Welcome to Mall Mystery Heroes!
+
+**How to Play:**
+- Players are assigned secret targets
+- Eliminate your targets by taking identifiable photos
+- Gain points by eliminating targets
+- Complete tasks to earn rewards
+- The player with the highest score wins!
+
+**Commands:**
+- Use \`/game join [your real name]\` to join the game
+- Game Masters can use various commands to manage the game
+
+**Important:**
+- Follow all server rules
+- Be respectful to other players
+- Have fun! 🎮`,
+        color: 0x0099ff,
+        footer: { text: 'Game created successfully!' }
+      });
+
+      const sentMessage = await generalChannel.send({ embeds: [rulesMessage] });
+      await sentMessage.pin();
+
+      await interaction.editReply('✅ Game created successfully! The room has been initialized, channels have been set up, and rules have been posted.');
+
+    } catch (error) {
+      console.error('Error in /game create:', error);
+      await handleError(error, interaction);
+    }
   },
 };
-

@@ -6,7 +6,7 @@
 const CHANNELS = {
   GENERAL: 'general',
   GAME_MASTERS: 'game-masters',
-  DMS_CATEGORY: 'DMS',
+  DMS_CATEGORY: 'dms',
   ANNOUNCEMENTS: 'announcements',
   SCOREBOARD: 'scoreboard',
 };

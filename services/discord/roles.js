@@ -58,6 +58,7 @@ async function createRole(guild, name, options = {}) {
 /**
  * Deletes a role
  * @param {Role} role - The role to delete
+ * @param {string} reason - Optional audit-log reason
  * @returns {Promise<void>}
  */
 async function deleteRole(role, reason = 'Role deleted via Mall Mystery Heroes bot') {
@@ -75,8 +76,8 @@ async function deleteRole(role, reason = 'Role deleted via Mall Mystery Heroes b
 /**
  * Assigns a role to a member
  * @param {GuildMember} member - The guild member
- * @param {Role} role - The role to assign
- * @returns {Promise<void>}
+ * @param {Role|string} role - The role to assign
+ * @returns {Promise<Role>}
  */
 async function assignRole(member, role) {
   if (!member) {
@@ -95,8 +96,8 @@ async function assignRole(member, role) {
 /**
  * Removes a role from a member
  * @param {GuildMember} member - The guild member
- * @param {Role} role - The role to remove
- * @returns {Promise<void>}
+ * @param {Role|string} role - The role to remove
+ * @returns {Promise<Role>}
  */
 async function removeRole(member, role) {
   if (!member) {
@@ -116,6 +117,7 @@ async function removeRole(member, role) {
  * Gets or creates a role by name
  * @param {Guild} guild - The Discord guild
  * @param {string} name - Role name
+ * @param {Object} options - Role options
  * @returns {Promise<Role>}
  */
 async function getOrCreateRole(guild, name, options = {}) {
