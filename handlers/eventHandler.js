@@ -18,13 +18,18 @@ function registerEvents(client) {
   for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
     const event = require(filePath);
-    
+    // Skip modules that are internal handlers (not real events)
+    if (event && event._skipRegister) {
+      console.log(`Skipping internal handler file: ${file}`);
+      continue;
+    }
+
     if (event.once) {
       client.once(event.name, (...args) => event.execute(...args));
     } else {
       client.on(event.name, (...args) => event.execute(...args));
     }
-    
+
     console.log(`Registered event: ${event.name}`);
   }
 }

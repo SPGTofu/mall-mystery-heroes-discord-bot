@@ -43,23 +43,31 @@ module.exports = {
     if (taskData.points < 0) {
       return { isValid: false, error: 'Points cannot be negative.' };
     }
-    if (taskData.points > 10000) {
-      return { isValid: false, error: 'Points cannot exceed 10000.' };
+    if (taskData.points > 100) {
+      return { isValid: false, error: 'Points cannot exceed 100.' };
     }
     return { isValid: true };
   },
 
   async execute(interaction) {
     try {
-      // Check GM permissions
-      /*
-      if (!canPerformGMActions(interaction.member)) {
+      // Enforce GM-only usage by fetching the full GuildMember and checking role name
+      const { PermissionsBitField } = require('discord.js');
+      const guildMember = interaction.guild
+        ? await interaction.guild.members.fetch(interaction.user.id)
+        : interaction.member;
+
+      const isAdmin = guildMember.permissions?.has?.(PermissionsBitField.Flags.Administrator);
+      const isGM = guildMember.roles?.cache
+        ? guildMember.roles.cache.some(r => r.name === 'Game Master')
+        : false;
+
+      if (!isAdmin && !isGM) {
         return await interaction.reply({
           content: '❌ You do not have permission to create tasks. GM role required.',
           ephemeral: true,
         });
       }
-        */
 
       // Create modal with labeled input fields
       const modal = new ModalBuilder()
@@ -89,12 +97,12 @@ module.exports = {
       // Task Type selector
       const taskTypeInput = new TextInputBuilder()
         .setCustomId('task_type_input')
-        .setLabel('Task Type (normal or revival)')
-        .setPlaceholder('Choose: normal or revival')
+        .setLabel('Task Type (N for normal, R for revival)')
+        .setPlaceholder('Type: N or R')
         .setStyle(TextInputStyle.Short)
-        .setMaxLength(20)
+        .setMaxLength(1)
         .setRequired(false)
-        .setValue('normal');
+        .setValue('N');
 
       // Max Completers input
       const maxCompletersInput = new TextInputBuilder()
@@ -109,10 +117,10 @@ module.exports = {
       // Points input
       const pointsInput = new TextInputBuilder()
         .setCustomId('points_input')
-        .setLabel('Points Awarded (0-10000)')
+        .setLabel('Points Awarded (0-100)')
         .setPlaceholder(`Default: ${GAME_RULES.TASK.DEFAULT_POINTS}`)
         .setStyle(TextInputStyle.Short)
-        .setMaxLength(5)
+        .setMaxLength(3)
         .setRequired(false)
         .setValue(String(GAME_RULES.TASK.DEFAULT_POINTS));
 
