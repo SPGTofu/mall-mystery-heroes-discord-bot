@@ -103,6 +103,7 @@ async function registerCommands(client) {
       discordCommands.push({
         name: command.name,
         description: command.description || 'No description',
+        options: command.options || []
       });
     }
   });
