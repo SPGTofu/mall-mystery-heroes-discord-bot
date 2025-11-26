@@ -184,6 +184,91 @@ async function updateAssassinsForPlayer(playerName, assassins, roomID) {
   }
 }
 
+/**
+ * Unmaps a player's targets and assassins (Admin SDK version)
+ * @param {string} selectedPlayerName
+ * @param {string} roomID
+ */
+async function unmapPlayers(selectedPlayerName, roomID) {
+  const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+  // Get selected player
+  const playerSnapshot = await playersRef.where('name', '==', selectedPlayerName).get();
+  if (playerSnapshot.empty) {
+    console.error("Error unmapping: player not found:", selectedPlayerName);
+    return;
+  }
+
+  const playerDoc = playerSnapshot.docs[0].ref;
+  const playerData = playerSnapshot.docs[0].data();
+  const playerAssassins = playerData.assassins || [];
+  const playerTargets = playerData.targets || [];
+
+  // Remove selected player from assassins' targets
+  for (const assassinName of playerAssassins) {
+    const assassinSnap = await playersRef.where('name', '==', assassinName).get();
+    if (assassinSnap.empty) {
+      console.error("Error unmapping assassin not found:", assassinName);
+      continue;
+    }
+    const assassinDoc = assassinSnap.docs[0].ref;
+    const assassinData = assassinSnap.docs[0].data();
+    const newTargets = (assassinData.targets || []).filter(t => t !== selectedPlayerName);
+    await assassinDoc.update({ targets: newTargets });
+  }
+
+  // Remove selected player from targets' assassins
+  for (const targetName of playerTargets) {
+    const targetSnap = await playersRef.where('name', '==', targetName).get();
+    if (targetSnap.empty) {
+      console.error("Error unmapping target not found:", targetName);
+      continue;
+    }
+    const targetDoc = targetSnap.docs[0].ref;
+    const targetData = targetSnap.docs[0].data();
+    const newAssassins = (targetData.assassins || []).filter(a => a !== selectedPlayerName);
+    await targetDoc.update({ assassins: newAssassins });
+  }
+
+  await playerDoc.update({ targets: [], assassins: [] });
+}
+
+/**
+ * Kills a player in a room (Admin SDK version)
+ * @param {string} playerName
+ * @param {string} roomID
+ */
+async function killPlayerForRoom(playerName, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snap = await playersRef.where('name', '==', playerName).get();
+
+    if (snap.empty) {
+      throw new Error(`Player ${playerName} not found`);
+    }
+
+    // Unmap targets and assassins first
+    await unmapPlayers(playerName, roomID);
+
+    const playerDoc = snap.docs[0].ref;
+
+    await playerDoc.update({
+      score: 0,
+      isAlive: false,
+      openSeason: false,
+      targets: [],
+      targetsLength: 0,
+      assassins: [],
+      assassinsLength: 0
+    });
+
+    console.log(`Player ${playerName} killed in room ${roomID}.`);
+  } catch (err) {
+    console.error('Error killing player:', err);
+    throw err;
+  }
+}
+
 module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
@@ -193,5 +278,6 @@ module.exports = {
   addPlayerForRoom,
   updateTargetsForPlayer,
   updateAssassinsForPlayer,
+  unmapPlayers,
+  killPlayerForRoom,
 };
-
