@@ -6,10 +6,11 @@
 const CHANNELS = {
   GENERAL: 'general',
   GAME_MASTERS: 'game-masters',
-  DMS: 'dms',
+  DMS_CATEGORY: 'DMS',
   ANNOUNCEMENTS: 'announcements',
   SCOREBOARD: 'scoreboard',
 };
 
 module.exports = CHANNELS;
+
 

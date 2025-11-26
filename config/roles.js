@@ -9,7 +9,9 @@ const ROLES = {
   ALIVE: 'Alive',
   DEAD: 'Dead',
   ADMIN: 'Admin',
+  OPEN_SEASON: 'Open Season'
 };
 
 module.exports = ROLES;
+
 
