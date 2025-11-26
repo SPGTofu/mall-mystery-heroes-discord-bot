@@ -93,18 +93,37 @@ async function registerCommands(client) {
       if (!groups.has(groupName)) {
         groups.set(groupName, []);
       }
-      groups.get(groupName).push({
+      const subcommandData = {
         type: 1, // SUB_COMMAND
         name: command.name,
         description: command.description || 'No description',
-      });
+      };
+
+      if (Array.isArray(command.options) && command.options.length > 0) {
+        subcommandData.options = command.options;
+      }
+
+      groups.get(groupName).push(subcommandData);
     } else {
       // This is a standalone command
-      discordCommands.push({
+      const commandData = {
         name: command.name,
         description: command.description || 'No description',
-        options: command.options || []
-      });
+      };
+
+      if (Array.isArray(command.options) && command.options.length > 0) {
+        commandData.options = command.options;
+      }
+
+      if (command.default_member_permissions) {
+        commandData.default_member_permissions = command.default_member_permissions;
+      }
+
+      if (typeof command.dm_permission === 'boolean') {
+        commandData.dm_permission = command.dm_permission;
+      }
+
+      discordCommands.push(commandData);
     }
   });
   

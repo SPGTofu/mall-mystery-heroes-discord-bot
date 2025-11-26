@@ -8,7 +8,6 @@ const ROLES = {
   PLAYER: 'Player',
   ALIVE: 'Alive',
   DEAD: 'Dead',
-  ADMIN: 'Admin',
   OPEN_SEASON: 'Open Season'
 };
 

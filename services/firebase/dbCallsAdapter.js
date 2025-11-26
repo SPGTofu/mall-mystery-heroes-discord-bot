@@ -95,27 +95,27 @@ async function fetchAlivePlayersForRoom(roomID) {
 /**
  * Adds a player to the room
  * @param {string} playerName - Player name
+ * @param {string} userID - Discord user ID (unique identifier)
  * @param {string} roomID - Room ID
  * @returns {Promise<void>}
  */
-async function addPlayerForRoom(playerName, roomID) {
+async function addPlayerForRoom(playerName, userID, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const trimmedLowercaseName = playerName.replace(/\s/g, '').toLowerCase();
     
-    // Check if player already exists
+    // Check if player already exists by user ID (unique identifier)
     const existingPlayer = await playersRef
-      .where('trimmedNameLowerCase', '==', trimmedLowercaseName)
+      .where('userID', '==', userID)
       .get();
     
     if (!existingPlayer.empty) {
-      throw new Error('Player already exists');
+      throw new Error('User already in game');
     }
     
-    // Add player
+    // Add player with user ID as unique identifier
     await playersRef.add({
       name: playerName,
-      trimmedNameLowerCase: trimmedLowercaseName,
+      userID: userID,
       isAlive: true,
       score: 10,
       targets: [],
