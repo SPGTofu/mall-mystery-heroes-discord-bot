@@ -3,14 +3,17 @@
  * Validates user permissions for various actions
  */
 
+const { PermissionFlagsBits } = require('discord.js');
+const ROLES = require('../../config/roles');
+
 /**
  * Checks if a member has admin permissions
+ * Relies on Discord's native Administrator permission
  * @param {GuildMember} member - The guild member
  * @returns {boolean}
  */
 function isAdmin(member) {
-  // TODO: Implement admin check
-  return member.permissions.has('Administrator');
+  return Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator));
 }
 
 /**
@@ -20,7 +23,7 @@ function isAdmin(member) {
  * @returns {boolean}
  */
 function hasRole(member, roleName) {
-  // TODO: Implement role check
+  if (!member?.roles?.cache?.size) return false;
   return member.roles.cache.some(role => role.name === roleName);
 }
 
@@ -30,8 +33,7 @@ function hasRole(member, roleName) {
  * @returns {boolean}
  */
 function isGameMaster(member) {
-  // TODO: Implement GM check (check for GM role)
-  return hasRole(member, 'Game Master');
+  return hasRole(member, ROLES.GAME_MASTER);
 }
 
 /**
@@ -40,8 +42,7 @@ function isGameMaster(member) {
  * @returns {boolean}
  */
 function isPlayer(member) {
-  // TODO: Implement player check (check for Player role)
-  return hasRole(member, 'Player');
+  return hasRole(member, ROLES.PLAYER);
 }
 
 module.exports = {
