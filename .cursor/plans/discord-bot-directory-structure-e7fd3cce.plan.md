@@ -46,16 +46,52 @@ mall-mystery-heroes-discord-bot/
 │       └── user.js
 ├── services/
 │   ├── firebase/
-│   │   ├── db.js                # Firestore database operations
-│   │   ├── storage.js           # Firebase Storage operations
-│   │   └── config.js            # Firebase initialization
+│   │   ├── config.js            # Firebase Admin SDK initialization (adapt from client SDK)
+│   │   ├── dbCalls.js           # Firestore database operations (adapted from Firebase func/dbCalls.js)
+│   │   │                         # Contains all CRUD operations:
+│   │   │                         # - Players: fetchAllPlayersForRoom, fetchPlayersByStatusForRoom,
+│   │   │                         #   fetchPlayerForRoom, addPlayerForRoom, removePlayerForRoom,
+│   │   │                         #   updatePointsForPlayer, updateIsAliveForPlayer,
+│   │   │                         #   updateTargetsForPlayer, updateAssassinsForPlayer,
+│   │   │                         #   killPlayerForRoom, fetchTargetsForPlayer, fetchAssassinsForPlayer
+│   │   │                         # - Tasks: fetchAllTasksForRoom, fetchTasksByCompletionForRoom,
+│   │   │                         #   fetchTaskForRoom, addTaskForRoom, updateIsCompleteToTrueForTask,
+│   │   │                         #   updateCompletedByForTask, checkForTaskDupesForRoom
+│   │   │                         # - Game: endGame, checkForRoomIDDupes, fetchTaskIndexThenIncrement
+│   │   │                         # - Logs: fetchAllLogsForRoom, updateLogsForRoom
+│   │   │                         # - Photos: fetchPhotosQueryByAscendingTimestampForRoom
+│   │   │                         # - Open Season: setOpenSznOfPlayerToValueForRoom, checkOpenSzn
+│   │   │                         # - Queries: fetchAlivePlayersQueryByDescendPointsForRoom,
+│   │   │                         #   fetchAlivePlayersByAscendAssassinsLengthForRoom,
+│   │   │                         #   fetchAlivePlayersByAscendTargetsLengthForRoom
+│   │   ├── targetGenerator.js   # Initial target assignment algorithm (adapted from Firebase func/TargetGenerator.js)
+│   │   │                         # Core algorithm:
+│   │   │                         # - Randomizes player order
+│   │   │                         # - Calculates MAXTARGETS: 3 (15+ players), 2 (6-15), 1 (≤5)
+│   │   │                         # - Assigns targets in circular fashion, preventing self-targeting
+│   │   │                         # - Prevents circular targeting relationships
+│   │   │                         # - Updates targets and assassins in database via dbCalls
+│   │   │                         # - Returns target map for verification
+│   │   ├── remapPlayers.js      # Target/assassin remapping algorithm (adapted from Firebase func/RemapPlayers.js)
+│   │   │                         # Core algorithm:
+│   │   │                         # - handleTargetRegeneration: assigns new targets to players needing them
+│   │   │                         # - handleAssassinRegeneration: assigns new assassins to players needing them
+│   │   │                         # - Uses randomized player order for fair distribution
+│   │   │                         # - Fallback logic: uses players with lowest assassin/target counts
+│   │   │                         # - Prevents self-targeting, circular targeting, exceeding MAXTARGETS
+│   │   │                         # - Used for revive and reassignment scenarios
+│   │   └── unmapPlayers.js      # Player unmapping algorithm (adapted from Firebase func/UnmapPlayers.js)
+│   │                             # Core algorithm:
+│   │                             # - Removes player from all assassin's targets list
+│   │                             # - Removes player from all target's assassins list
+│   │                             # - Clears player's targets and assassins arrays
+│   │                             # - Used when killing/removing players (called by killPlayerForRoom)
 │   ├── discord/
 │   │   ├── channels.js          # Channel management utilities
 │   │   ├── roles.js             # Role management utilities
 │   │   ├── permissions.js      # Permission checking utilities
 │   │   └── messages.js          # Message formatting utilities
 │   └── game/
-│       ├── targetAssignment.js  # Target assignment algorithm
 │       ├── pointSystem.js       # Point calculation logic
 │       ├── gameState.js         # Game state management
 │       └── validation.js        # Game rule validation
@@ -96,22 +132,42 @@ Each command file exports a handler function that:
 
 ### Services Layer
 
-- **firebase/**: All backend database operations
-  - `db.js`: Firestore CRUD operations for games, players, tasks
-  - `storage.js`: Image/file storage operations
-  - `config.js`: Firebase Admin SDK initialization
+- **firebase/**: All backend database operations (adapted from `Firebase func/` folder)
+  - `config.js`: Firebase Admin SDK initialization (adapt from client SDK to Admin SDK)
+  - `dbCalls.js`: Comprehensive Firestore CRUD operations (adapted from `Firebase func/dbCalls.js`)
+    - Player operations: fetch, add, remove, update (points, status, targets, assassins)
+    - Task operations: fetch, add, update, complete
+    - Game state: room management, game ending, task indexing
+    - Logs: fetch and update game logs
+    - Photos: query operations for photo submissions
+    - Open Season: enable/disable and check status
+    - Queries: sorted player queries for leaderboards and target assignment
+  - `targetGenerator.js`: Initial target assignment algorithm (adapted from `Firebase func/TargetGenerator.js`)
+    - Randomizes player order for fair distribution
+    - Calculates MAXTARGETS based on player count (3 for 15+, 2 for 6-15, 1 for ≤5)
+    - Assigns targets in circular fashion, preventing self-targeting and circular relationships
+    - Updates both targets and assassins in database
+  - `remapPlayers.js`: Target/assassin remapping for revives and reassignments (adapted from `Firebase func/RemapPlayers.js`)
+    - Regenerates targets for players needing new targets
+    - Regenerates assassins for players needing new assassins
+    - Uses fallback logic with players having lowest target/assassin counts
+    - Prevents all game rule violations (self-targeting, circular, exceeding limits)
+  - `unmapPlayers.js`: Player unmapping when killed/removed (adapted from `Firebase func/UnmapPlayers.js`)
+    - Removes player from all assassin's targets lists
+    - Removes player from all target's assassins lists
+    - Clears player's own targets and assassins arrays
+    - Called automatically by `killPlayerForRoom` in dbCalls.js
 
 - **discord/**: Discord API wrapper utilities
-  - Channel creation/deletion
-  - Role management
-  - Permission checks
-  - Message formatting
+  - Channel creation/deletion (General, Game Masters, DMs)
+  - Role management (GM, Player, Alive, Dead)
+  - Permission checks (GM, Player, Admin permissions)
+  - Message formatting (embeds, announcements, DMs)
 
-- **game/**: Core game logic
-  - Target assignment algorithm
-  - Point calculations
-  - Game state transitions
-  - Validation rules
+- **game/**: Core game logic and validation
+  - `pointSystem.js`: Point calculation logic (transfer on kill, task rewards)
+  - `gameState.js`: Game state management (pre-game, active, ended)
+  - `validation.js`: Game rule validation (kill validation, target validation)
 
 ### Models
 
