@@ -30,22 +30,18 @@ mall-mystery-heroes-discord-bot/
 │   │   ├── unalive.js          # /unalive
 │   │   ├── revive.js            # /revive
 │   │   └── info.js              # /player
+│   │   └── kill.js              # /kill
 │   ├── task/
 │   │   ├── create.js           # /task create
 │   │   ├── complete.js          # /task complete
 │   │   ├── end.js               # /task end
 │   │   └── get.js               # /task get
-│   ├── assassination/
-│   │   └── kill.js              # /kill
 │   ├── openseason/
 │   │   ├── start.js             # /openseason start
 │   │   └── end.js               # /openseason end
 │   ├── broadcast/
 │   │   ├── scoreboard.js        # /scoreboard
 │   │   └── message.js           # /broadcast
-│   └── utility/
-│       ├── ping.js              # Existing utility commands
-│       └── user.js
 ├── src/
 │   └── services/
 │       └── firebase/
