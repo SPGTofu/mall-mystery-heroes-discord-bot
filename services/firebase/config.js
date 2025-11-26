@@ -11,13 +11,23 @@ if (!admin.apps.length) {
     ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
     : null;
 
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } else {
-    // Use default credentials (for Firebase emulator or GCP)
-    admin.initializeApp();
+  try {
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else if (process.env.FIREBASE_PROJECT_ID) {
+      // Use project ID from environment if available
+      admin.initializeApp({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    } else {
+      // Fallback: use default credentials (for Firebase emulator or GCP)
+      admin.initializeApp();
+    }
+  } catch (err) {
+    console.error('Firebase initialization error:', err.message);
+    console.log('Ensure FIREBASE_SERVICE_ACCOUNT env var is set or running against emulator');
   }
 }
 

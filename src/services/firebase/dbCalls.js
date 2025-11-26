@@ -1,4 +1,4 @@
-import { db } from '../../utils/firebase';
+import { db } from '../../../utils/firebase.js';
 import { collection, 
          getDocs, 
          query, 
@@ -11,7 +11,7 @@ import { collection,
          deleteDoc,
          arrayUnion,
     } from 'firebase/firestore';
-import UnmapPlayers from '../UnmapPlayers';
+import UnmapPlayers from './UnmapPlayers.js';
 
 //fetches all players from database
 export const fetchAllPlayersForRoom = async (roomID) => {
