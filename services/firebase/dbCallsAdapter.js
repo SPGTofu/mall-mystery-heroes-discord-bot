@@ -115,6 +115,44 @@ async function getPlayerByUserID(userID, roomID) {
 }
 
 /**
+ * Fetches every player document for a room
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<FirebaseFirestore.QueryDocumentSnapshot>>}
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs;
+  } catch (error) {
+    console.error('Error fetching players:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a player document based on Discord user ID
+ * @param {string} userID - Discord user ID
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.QueryDocumentSnapshot>}
+ */
+async function fetchPlayerByUserIdForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).limit(1).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player with user ID ${userID} not found in room ${roomID}.`);
+    }
+
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error(`Error fetching player by user ID ${userID}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Adds a player to the room
  * @param {string} playerName - Player name
  * @param {string} userID - Discord user ID (unique identifier)
@@ -490,6 +528,8 @@ module.exports = {
   unmapPlayers,
   killPlayerForRoom,
   fetchPlayerForRoom,
+  fetchPlayerByUserIdForRoom,
+  fetchAllPlayersForRoom,
   setOpenSeasonForPlayer,
   checkOpenSeason,
   getPlayerByUserID,
