@@ -9,7 +9,8 @@ const {
   getRoom, 
   fetchAllPlayersForRoom, 
   generateAndAssignTargets,
-  createOrUpdateRoom 
+  createOrUpdateRoom,
+  validatePlayersNotInOtherActiveGames
 } = require('../../services/firebase/dbCallsAdapter');
 const { findChannelByName } = require('../../services/discord/channels');
 const { createEmbed, createAnnouncement } = require('../../services/discord/messages');
@@ -51,6 +52,18 @@ module.exports = {
       if (players.length < GAME_RULES.MIN_PLAYERS_TO_START) {
         throw new GameError(
           `Not enough players to start the game. Minimum ${GAME_RULES.MIN_PLAYERS_TO_START} players required, but only ${players.length} have joined.`
+        );
+      }
+
+      // Validate that no players are in another active game
+      await interaction.editReply('Validating players...');
+      const validationResult = await validatePlayersNotInOtherActiveGames(roomID);
+      
+      if (!validationResult.isValid) {
+        const conflictNames = validationResult.conflicts.map(c => c.name).join(', ');
+        throw new GameError(
+          `Cannot start game: The following players are already in another active game: **${conflictNames}**. ` +
+          `Players must leave their other active game before joining this one.`
         );
       }
 
