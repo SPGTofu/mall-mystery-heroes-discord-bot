@@ -962,6 +962,120 @@ async function validatePlayersNotInOtherActiveGames(roomID) {
   }
 }
 
+
+/**
+ * Fetches targets for a player (including open season players)
+ * Admin SDK version of fetchTargetsForPlayer
+ * @param {string} playerName - Player name
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<string>>} Array of target names
+ */
+async function fetchTargetsForPlayer(playerName, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Fetch player and open season players in parallel
+    const [playerSnapshot, openSeasonSnapshot] = await Promise.all([
+      playersRef.where('name', '==', playerName).get(),
+      playersRef.where('openSeason', '==', true).get()
+    ]);
+
+    let targets = [];
+    if (!playerSnapshot.empty) {
+      const playerTargets = playerSnapshot.docs[0].data().targets || [];
+      const openSeasonPlayers = openSeasonSnapshot.docs.map(doc => doc.data().name);
+
+      // Find if the player is in open season
+      let foundIndex = -1;
+      for (let k = 0; k < openSeasonPlayers.length; k++) {
+        if (playerName === openSeasonPlayers[k]) {
+          foundIndex = k;
+          break;
+        }
+      }
+
+      // If player is in open season, remove them from the list
+      if (foundIndex !== -1) {
+        const newOpenSzn = [...openSeasonPlayers];
+        newOpenSzn.splice(foundIndex, 1);
+        targets = Array.from(new Set([...playerTargets, ...newOpenSzn]));
+      } else {
+        targets = Array.from(new Set([...playerTargets, ...openSeasonPlayers]));
+      }
+    }
+
+    return targets;
+  } catch (error) {
+    console.error('Error fetching player targets:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetches points value of player
+ * Admin SDK version of fetchPointsForPlayerInRoom
+ * @param {string} playerName - Player name
+ * @param {string} roomID - Room ID
+ * @returns {Promise<number>} Player's score
+ */
+async function fetchPointsForPlayerInRoom(playerName, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('name', '==', playerName).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player ${playerName} not found`);
+    }
+
+    return parseInt(snapshot.docs[0].data().score);
+  } catch (error) {
+    console.error('Error fetching points for player:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * Adds a new log to the room's logs array
+ * Admin SDK version of updateLogsForRoom
+ * @param {string} newLog - Log message
+ * @param {string} color - Log color
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array>} Updated logs array
+ */
+async function updateLogsForRoom(newLog, color, roomID) {
+  try {
+    const admin = require('firebase-admin');
+    const date = new Date();
+    const time = date.toLocaleTimeString();
+
+    const roomRef = db.collection('rooms').doc(roomID);
+    const roomSnapshot = await roomRef.get();
+
+    if (!roomSnapshot.exists) {
+      throw new Error(`Room ${roomID} not found`);
+    }
+
+    const newAddition = {
+      time: time,
+      log: newLog,
+      color: color
+    };
+
+    // Use FieldValue.arrayUnion for Admin SDK
+    await roomRef.update({
+      logs: admin.firestore.FieldValue.arrayUnion(newAddition)
+    });
+
+    // Fetch and return updated logs
+    const updatedSnapshot = await roomRef.get();
+    return updatedSnapshot.data().logs;
+  } catch (error) {
+    console.error('Error updating logList:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
@@ -990,4 +1104,7 @@ module.exports = {
   generateAndAssignTargets,
   checkUserInOtherActiveGame,
   validatePlayersNotInOtherActiveGames,
+  updateLogsForRoom,
+  fetchPointsForPlayerInRoom,
+  fetchTargetsForPlayer,
 };
