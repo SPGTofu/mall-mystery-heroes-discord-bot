@@ -87,6 +87,6 @@ module.exports = {
   createChannel,
   deleteChannel,
   getChannel,
-  getOrCreateChannel,
+  getOrCreateChannel
 };
 

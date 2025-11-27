@@ -4,7 +4,12 @@
  */
 
 const { ApplicationCommandOptionType } = require("discord.js");
-const { handleReviveForPlayer } = require("../../services/firebase/dbCallsAdapter");
+const { handleReviveForPlayer, getRoom } = require("../../services/firebase/dbCallsAdapter");
+const { createAnnouncement, createErrorAnnouncement } = require("../../services/discord/messages");
+const { hasRole } = require("../../services/discord/permissions");
+const { ROLES } = require("../../config/roles");
+const { removeRole, assignRole } = require("../../services/discord/roles");
+const { GameError } = require("../../utils/errors");
 
 module.exports = {
   name: 'revive',
@@ -24,87 +29,59 @@ module.exports = {
     }
   ],
   async execute(interaction) {
+
     const playerToRevive = interaction.options.getUser('player');
     const roomID = interaction.guildId;
 
     const member = await interaction.guild.members.fetch(playerToRevive.id);
-    const roles = member.roles.cache.map(role => role.name);
 
     const sender = interaction.member;
-    const senderRoles = sender.roles.cache.map(role => role.name);
 
     const gmChannel = interaction.guild.channels.cache.find(ch => ch.name === "game-masters");
 
-    // Only GM can revive
-    if (!senderRoles.includes('Game Master')) {
-      await gmChannel.send({
-        embeds: [
-          {
-            title: "Error",
-            description: `${sender} tried to revive ${playerToRevive}, but they are not a GM.`,
-            color: 0xFF0000
-          }
-        ]
-      });
+    // Check if room/game exists
+    const roomSnapshot = await getRoom(roomID);
+    if (!roomSnapshot.exists) {
+      throw new GameError('No game has been created yet.');
+    }
 
-      return interaction.reply({
-        embeds: [
-          {
-            title: "Error",
-            description: 'You are not a game master.',
-            color: 0xFF0000
-          }
-        ],
-        flags: ['Ephemeral']
-      });
+    // Only GM can revive
+    if (!hasRole(sender, ROLES.GAME_MASTER)) {
+      const message = createErrorAnnouncement(`${sender} tried to revive ${playerToRevive}, but they are not a GM.`);
+      await gmChannel.send({ embeds: [message]});
+      const userError = createErrorAnnouncement('You are not a game master.');
+      return interaction.reply({ embeds: [userError] });
     }
 
     // Cannot revive someone already alive
-    if (roles.includes('Alive')) {
-      await gmChannel.send({
-        embeds: [
-          {
-            title: "Error",
-            description: `${playerToRevive} is already alive.`,
-            color: 0xFF0000
-          }
-        ]
-      });
+    if (hasRole(member, ROLES.ALIVE)) {
+      const message = createErrorAnnouncement(`${playerToRevive} is already alive.`);
+      await gmChannel.send({ embeds: [message] });
+      const replyMessage = createErrorAnnouncement(`${playerToRevive} is already alive.`);
+      return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
+    }
 
-      return interaction.reply({
-        embeds: [
-          {
-            title: "Error",
-            description: `${playerToRevive} is already alive.`,
-            color: 0xFF0000
-          }
-        ],
-        flags: ['Ephemeral']
-      });
+    // Cannot revive someone not dead
+    if (!hasRole(member, ROLES.DEAD)) {
+      const message = createErrorAnnouncement(`${playerToRevive} is not dead.`);
+      await gmChannel.send({ embeds: [message] });
+      const replyMessage = createErrorAnnouncement(`${playerToRevive} is not dead.`);
+      return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
+    }
+
+    // Cannot revive someone not a player
+    if (!hasRole(member, ROLES.PLAYER)) {
+      const message = createErrorAnnouncement(`${playerToRevive} is not a player.`);
+      await gmChannel.send({ embeds: [message] });
+      const replyMessage = createErrorAnnouncement(`${playerToRevive} is not a player.`);
+      return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
     }
 
     // Cannot revive a GM
-    if (roles.includes('Game Master')) {
-      await gmChannel.send({
-        embeds: [
-          {
-            title: "Error",
-            description: `${playerToRevive} cannot be revived. They are a Game Master.`,
-            color: 0xFF0000
-          }
-        ]
-      });
-
-      return interaction.reply({
-        embeds: [
-          {
-            title: "Error",
-            description: `${playerToRevive} cannot be revived. They are a Game Master.`,
-            color: 0xFF0000
-          }
-        ],
-        flags: ['Ephemeral']
-      });
+    if (hasRole(member, ROLES.GAME_MASTER)) {
+      const message = createErrorAnnouncement(`${playerToRevive} cannot be revived. They are a Game Master.`);
+      await gmChannel.send({ embeds: [message] });
+      return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
     }
 
     try {
@@ -113,41 +90,17 @@ module.exports = {
       await handleReviveForPlayer(playerToRevive.id, roomID, points);
 
       // Update Discord roles
-      await member.roles.remove('Dead');
-      await member.roles.add('Alive');
+      await removeRole(member, ROLES.DEAD);
+      await assignRole(member, ROLES.ALIVE);
 
-      return interaction.reply({
-        embeds: [
-          {
-            title: "Success",
-            description: `${playerToRevive} has been revived with ${points} points!`,
-            color: 0x00ff00
-          }
-        ],
-        flags: ['Ephemeral']
-      });
+      const message = createAnnouncement('Success', `${playerToRevive} has been revived with ${points} points!`);
+      await gmChannel.send({ embeds: [message] })
+      return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
 
     } catch (e) {
-      await gmChannel.send({
-        embeds: [
-          {
-            title: "Error",
-            description: `An error occurred reviving ${playerToRevive}: ${e}`,
-            color: 0xFF0000
-          }
-        ]
-      });
-      return interaction.reply({
-        embeds: [
-          {
-            title: "Error",
-            description: `An error occurred reviving ${playerToRevive}: ${e}`,
-            color: 0xFF0000
-          }
-        ],
-        flags: ['Ephemeral']
-      });
+      const message = createErrorAnnouncement(`An error occurred reviving ${playerToRevive}: ${e}`);
+      await gmChannel.send({ embeds: [message] });
+      return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
     }
   },
 };
-

@@ -6,9 +6,9 @@
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { isGameMaster, isAdmin } = require('../../services/discord/permissions');
 const { getRoom, addPlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
-const { getOrCreatePlayerRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
-const { createChannel } = require('../../services/discord/channels');
-const { createEmbed } = require('../../services/discord/messages');
+const { getOrCreateRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
+const { createChannel, getChannel } = require('../../services/discord/channels');
+const { createEmbed, createAnnouncement } = require('../../services/discord/messages');
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const CHANNELS = require('../../config/channels');
 const { ROLES } = require('../../config/roles');
@@ -19,7 +19,7 @@ module.exports = {
   options: [
     {
       name: 'name',
-      description: 'Your real name',
+      description: 'Your first and last name',
       type: 3, // STRING
       required: true,
     },
@@ -71,7 +71,7 @@ module.exports = {
       }
 
       // Get or create Player role
-      const playerRole = await getOrCreatePlayerRole(guild);
+      const playerRole = await getOrCreateRole(guild, ROLES.PLAYER);
       
       // Get or create Alive role (with hoist enabled to group members)
       const aliveRole = await getOrCreateAliveRole(guild);
@@ -154,10 +154,13 @@ module.exports = {
       });
 
       await dmChannel.send({ embeds: [welcomeEmbed] });
-      await dmChannel.send(`<@${member.id}>, please @Game Master here to test that everything is working before the game starts!`);
+      await dmChannel.send(`<@${member.id}>, if you need anything from the Game Masters, just @Game Masters here to get their attention. You can test it out now!`);
 
       await interaction.editReply(`✅ Successfully joined the game as **${playerName}**! Check your DM channel in the DMs category.`);
 
+      const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
+      const gmEmbed = createAnnouncement('Player Joined', `<@${member.id}> has joined the game.`);
+      await gmChannel.send({ embeds: [gmEmbed]});
     } catch (error) {
       console.error('Error in /game join:', error);
       await handleError(error, interaction);

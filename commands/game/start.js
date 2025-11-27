@@ -48,7 +48,7 @@ module.exports = {
       // Fetch all players
       await interaction.editReply('Fetching players...');
       const players = await fetchAllPlayersForRoom(roomID);
-      
+      console.log('playeres: ', players)
       if (players.length < GAME_RULES.MIN_PLAYERS_TO_START) {
         throw new GameError(
           `Not enough players to start the game. Minimum ${GAME_RULES.MIN_PLAYERS_TO_START} players required, but only ${players.length} have joined.`
