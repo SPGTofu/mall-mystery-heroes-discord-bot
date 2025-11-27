@@ -14,7 +14,7 @@ module.exports = {
   description: 'Promote a user to Game Master',
   options: [
     {
-      name: 'target',
+      name: 'user',
       description: 'User to promote to Game Master',
       type: ApplicationCommandOptionType.User,
       required: true,
@@ -31,7 +31,7 @@ module.exports = {
       throw new PermissionError('Only Discord administrators can promote Game Masters.');
     }
 
-    const targetUser = interaction.options.getUser('target', true);
+    const targetUser = interaction.options.getUser('user', true);
     const guild = interaction.guild;
     const botMember = guild.members.me ?? await guild.members.fetchMe();
 
@@ -42,6 +42,15 @@ module.exports = {
     const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
     if (!targetMember) {
       throw new ValidationError('Unable to find that member in this server.');
+    }
+
+    // Prevent promoting active players to Game Master
+    const playerRole = guild.roles.cache.find(role => role.name === ROLES.PLAYER);
+    const hasPlayerRole = playerRole ? targetMember.roles.cache.has(playerRole.id) : false;
+    const playerRecord = await getPlayerByUserID(targetMember.id, guild.id);
+
+    if (hasPlayerRole || playerRecord) {
+      throw new ValidationError('Players cannot be promoted to Game Master.');
     }
 
     // Remove all editable roles (except @everyone) to reset their state
