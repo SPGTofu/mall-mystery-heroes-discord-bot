@@ -83,8 +83,8 @@ module.exports = {
         // Defer reply to avoid "the application did not respond" for long ops
         await interaction.deferReply({ ephemeral: true });
 
-        // Save to backend
-        const taskId = await createTask(interaction.guildId, newTask);
+        // Save to backend with gameId (use guildId as gameId since one game per guild)
+        const taskId = await createTask(interaction.guildId, interaction.guildId, newTask);
 
         // Get general channel
         const generalChannel = interaction.guild.channels.cache.find(

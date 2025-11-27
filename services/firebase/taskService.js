@@ -8,13 +8,15 @@ const { db } = require('./config');
 /**
  * Creates a new task in the database
  * @param {string} guildId - The Discord guild ID (room ID)
+ * @param {string} gameId - The game/session ID to scope tasks
  * @param {Object} taskObject - The task plain object
  * @returns {Promise<string>} The created task document ID
  */
-async function createTask(guildId, taskObject) {
+async function createTask(guildId, gameId, taskObject) {
   try {
     const taskData = {
       ...taskObject,
+      gameId,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -47,14 +49,22 @@ async function getTask(guildId, taskId) {
 }
 
 /**
- * Gets all tasks for a guild
+ * Gets all tasks for a guild, optionally filtered by gameId
  * @param {string} guildId
+ * @param {string} gameId - Optional: filter tasks to a specific game
  * @returns {Promise<Array>} Array of task objects
  */
-async function getAllTasks(guildId) {
+async function getAllTasks(guildId, gameId = null) {
   try {
-    const tasksRef = db.collection('games').doc(guildId).collection('tasks');
-    const snapshot = await tasksRef.get();
+    let tasksRef = db.collection('games').doc(guildId).collection('tasks');
+    let query = tasksRef;
+    
+    // Filter by gameId if provided
+    if (gameId) {
+      query = query.where('gameId', '==', gameId);
+    }
+    
+    const snapshot = await query.get();
     const tasks = [];
     snapshot.forEach(doc => tasks.push({ id: doc.id, ...doc.data() }));
     return tasks;
@@ -73,7 +83,12 @@ async function getAllTasks(guildId) {
 async function updateTask(guildId, taskId, updateData) {
   try {
     const docRef = db.collection('games').doc(guildId).collection('tasks').doc(taskId);
-    await docRef.update({ ...updateData, updatedAt: new Date() });
+    const dataToUpdate = { ...updateData, updatedAt: new Date() };
+    // If task is being marked complete, set completedAt timestamp
+    if (updateData && updateData.isComplete === true && !updateData.completedAt) {
+      dataToUpdate.completedAt = new Date();
+    }
+    await docRef.update(dataToUpdate);
     console.log(`Task ${taskId} updated`);
   } catch (error) {
     console.error('Error updating task:', error);
@@ -111,9 +126,11 @@ async function completeTask(guildId, taskId, playerId) {
 
     completers.push(playerId);
     const isComplete = completers.length >= (taskData.maxCompleters || 1);
+      const updatePayload = { completers, isComplete, updatedAt: new Date() };
+      if (isComplete) updatePayload.completedAt = new Date();
 
-    await docRef.update({ completers, isComplete, updatedAt: new Date() });
-    return { id: taskId, ...taskData, completers, isComplete };
+      await docRef.update(updatePayload);
+      return { id: taskId, ...taskData, completers, isComplete, completedAt: updatePayload.completedAt };
   } catch (error) {
     console.error('Error completing task:', error);
     throw error;
