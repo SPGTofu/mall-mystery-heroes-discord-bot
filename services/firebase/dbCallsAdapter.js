@@ -113,6 +113,40 @@ async function fetchAlivePlayersForRoom(roomID) {
 }
 
 /**
+ * Fetches all players for a room with their data, sorted by score (descending)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player data objects with name, score, isAlive
+ */
+async function fetchAllPlayersWithScores(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    
+    const players = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        name: data.name || 'Unknown',
+        score: data.score || 0,
+        isAlive: data.isAlive || false,
+      };
+    });
+    
+    // Sort by score descending, then by isAlive (alive players first)
+    players.sort((a, b) => {
+      if (a.isAlive !== b.isAlive) {
+        return b.isAlive ? 1 : -1; // Alive players first
+      }
+      return b.score - a.score; // Higher score first
+    });
+    
+    return players;
+  } catch (error) {
+    console.error('Error fetching all players with scores:', error);
+    throw error;
+  }
+}
+
+/**
  * Gets a player by user ID
  * @param {string} userID - Discord user ID
  * @param {string} roomID - Room ID
@@ -130,6 +164,44 @@ async function getPlayerByUserID(userID, roomID) {
     return snapshot.docs[0];
   } catch (error) {
     console.error('Error getting player by user ID:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches every player document for a room
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<FirebaseFirestore.QueryDocumentSnapshot>>}
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs;
+  } catch (error) {
+    console.error('Error fetching players:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a player document based on Discord user ID
+ * @param {string} userID - Discord user ID
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.QueryDocumentSnapshot>}
+ */
+async function fetchPlayerByUserIdForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).limit(1).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player with user ID ${userID} not found in room ${roomID}.`);
+    }
+
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error(`Error fetching player by user ID ${userID}:`, error);
     throw error;
   }
 }
@@ -403,37 +475,24 @@ async function killPlayerForRoom(playerName, roomID) {
 }
 
 /**
- * Fetches a player from the room by name
- * Tries trimmed name first, then exact name match
+ * Fetches a player from the room by user ID
  * Admin SDK version of fetchPlayerForRoom
- * @param {string} playerName - Player name
+ * @param {string} userID - Discord user ID (unique identifier)
  * @param {string} roomID - Room ID
  * @returns {Promise<FirebaseFirestore.DocumentSnapshot>} Player document
  */
-async function fetchPlayerForRoom(playerName, roomID) {
+async function fetchPlayerForRoom(userID, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const trimmedLowercaseName = playerName.replace(/\s/g, '').toLowerCase();
+    const snapshot = await playersRef.where('userID', '==', userID).get();
     
-    // Try to find player by trimmed name first (most reliable)
-    let playerQuery = await playersRef
-      .where('trimmedNameLowerCase', '==', trimmedLowercaseName)
-      .get();
-
-    // If not found, try exact name match
-    if (playerQuery.empty) {
-      playerQuery = await playersRef
-        .where('name', '==', playerName)
-        .get();
+    if (snapshot.empty) {
+      throw new Error(`Player with userID "${userID}" not found in the game.`);
     }
     
-    if (playerQuery.empty) {
-      throw new Error(`Player "${playerName}" not found in the game.`);
-    }
-    
-    return playerQuery.docs[0];
+    return snapshot.docs[0];
   } catch (error) {
-    console.error(`Error fetching player ${playerName}:`, error);
+    console.error(`Error fetching player with userID ${userID}:`, error);
     throw error;
   }
 }
@@ -441,20 +500,20 @@ async function fetchPlayerForRoom(playerName, roomID) {
 /**
  * Sets open season status for a player
  * Admin SDK version of setOpenSznOfPlayerToValueForRoom
- * @param {string} playerName - Player name
+ * @param {string} userID - Discord user ID (unique identifier)
  * @param {boolean} value - Open season value (true/false)
  * @param {string} roomID - Room ID
  * @returns {Promise<void>}
  */
-async function setOpenSeasonForPlayer(playerName, value, roomID) {
+async function setOpenSeasonForPlayer(userID, value, roomID) {
   try {
-    const playerDoc = await fetchPlayerForRoom(playerName, roomID);
+    const playerDoc = await fetchPlayerForRoom(userID, roomID);
     await playerDoc.ref.update({
       openSeason: value,
       updatedAt: new Date()
     });
   } catch (error) {
-    console.error(`Error setting open season for ${playerName}:`, error);
+    console.error(`Error setting open season for userID ${userID}:`, error);
     throw error;
   }
 }
@@ -462,17 +521,17 @@ async function setOpenSeasonForPlayer(playerName, value, roomID) {
 /**
  * Checks if a player is in open season
  * Admin SDK version of checkOpenSzn
- * @param {string} playerName - Player name
+ * @param {string} userID - Discord user ID (unique identifier)
  * @param {string} roomID - Room ID
  * @returns {Promise<boolean>} True if player is in open season
  */
-async function checkOpenSeason(playerName, roomID) {
+async function checkOpenSeason(userID, roomID) {
   try {
-    const playerDoc = await fetchPlayerForRoom(playerName, roomID);
+    const playerDoc = await fetchPlayerForRoom(userID, roomID);
     const playerData = playerDoc.data();
     return playerData.openSeason === true;
   } catch (error) {
-    console.error(`Error checking open season for ${playerName}:`, error);
+    console.error(`Error checking open season for userID ${userID}:`, error);
   }
 }
 
@@ -550,6 +609,7 @@ module.exports = {
   endGame,
   fetchAllPlayersForRoom,
   fetchAlivePlayersForRoom,
+  fetchAllPlayersWithScores,
   addPlayerForRoom,
   updatePointsForPlayer,
   setPointsForPlayer,
@@ -559,6 +619,8 @@ module.exports = {
   unmapPlayers,
   killPlayerForRoom,
   fetchPlayerForRoom,
+  fetchPlayerByUserIdForRoom,
+  fetchAllPlayersForRoom,
   setOpenSeasonForPlayer,
   checkOpenSeason,
   getPlayerByUserID,
