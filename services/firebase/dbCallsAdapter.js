@@ -93,6 +93,40 @@ async function fetchAlivePlayersForRoom(roomID) {
 }
 
 /**
+ * Fetches all players for a room with their data, sorted by score (descending)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player data objects with name, score, isAlive
+ */
+async function fetchAllPlayersWithScores(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    
+    const players = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        name: data.name || 'Unknown',
+        score: data.score || 0,
+        isAlive: data.isAlive || false,
+      };
+    });
+    
+    // Sort by score descending, then by isAlive (alive players first)
+    players.sort((a, b) => {
+      if (a.isAlive !== b.isAlive) {
+        return b.isAlive ? 1 : -1; // Alive players first
+      }
+      return b.score - a.score; // Higher score first
+    });
+    
+    return players;
+  } catch (error) {
+    console.error('Error fetching all players with scores:', error);
+    throw error;
+  }
+}
+
+/**
  * Gets a player by user ID
  * @param {string} userID - Discord user ID
  * @param {string} roomID - Room ID
@@ -519,6 +553,7 @@ module.exports = {
   getRoom,
   endGame,
   fetchAlivePlayersForRoom,
+  fetchAllPlayersWithScores,
   addPlayerForRoom,
   updatePointsForPlayer,
   setPointsForPlayer,
