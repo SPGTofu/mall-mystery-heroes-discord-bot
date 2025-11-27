@@ -6,7 +6,7 @@
 const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, GameError, ValidationError, handleError } = require('../../utils/errors');
 const { getRoom, fetchPlayerForRoom, setOpenSeasonForPlayer } = require('../../services/firebase/dbCallsAdapter');
-const { findChannelByName } = require('../../services/discord/channels');
+const { getChannel } = require('../../services/discord/channels');
 const { createAnnouncement } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
@@ -39,10 +39,7 @@ module.exports = {
 
       const guild = interaction.guild;
       const roomID = guild.id; // Use guild ID as room ID
-
-      // Get player's display name or username
-      const member = await guild.members.fetch(targetUser.id).catch(() => null);
-      const playerName = member?.displayName || member?.nickname || targetUser.username;
+      const userID = targetUser.id;
 
       // Check if room exists
       const roomSnapshot = await getRoom(roomID);
@@ -51,10 +48,10 @@ module.exports = {
         throw new GameError('No game room exists. Please create a game first with /game create.');
       }
 
-      // Fetch player from database (handles trimmed and exact name matching)
-      const playerDoc = await fetchPlayerForRoom(playerName, roomID);
+      // Fetch player from database by userID
+      const playerDoc = await fetchPlayerForRoom(userID, roomID);
       const playerData = playerDoc.data();
-      const dbPlayerName = playerData.name || playerName; // Use database name if available
+      const dbPlayerName = playerData.name; // Use database name
       
       // Check if player already has open season (using data we already fetched)
       if (playerData.openSeason === true) {
@@ -62,10 +59,10 @@ module.exports = {
       }
 
       // Set open season to true
-      await setOpenSeasonForPlayer(playerName, true, roomID);
+      await setOpenSeasonForPlayer(userID, true, roomID);
 
       // Broadcast message to general channel
-      const generalChannel = findChannelByName(guild, CHANNELS.GENERAL);
+      const generalChannel = getChannel(guild, CHANNELS.GENERAL);
       if (generalChannel) {
         const announcement = createAnnouncement(
           '🔴 OPEN SEASON DECLARED',
