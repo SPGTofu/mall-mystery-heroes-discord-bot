@@ -440,17 +440,26 @@ async function unmapPlayers(selectedPlayerName, roomID) {
 
 /**
  * Kills a player in a room (Admin SDK version)
- * @param {string} playerId
+ * @param {string} playerIdentifier - Player name or userID
  * @param {string} roomID
  */
-async function killPlayerForRoom(playerId, roomID) {
+async function killPlayerForRoom(playerIdentifier, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snap = await playersRef.where('id', '==', playerId).get();
+    
+    // Try to find player by name first, then by userID
+    let snap = await playersRef.where('name', '==', playerIdentifier).get();
+    if (snap.empty) {
+      snap = await playersRef.where('userID', '==', playerIdentifier).get();
+    }
 
     if (snap.empty) {
-      throw new Error(`Player ${playerName} not found`);
+      throw new Error(`Player ${playerIdentifier} not found`);
     }
+
+    // Get player data to retrieve the name for unmapping
+    const playerData = snap.docs[0].data();
+    const playerName = playerData.name;
 
     // Unmap targets and assassins first
     await unmapPlayers(playerName, roomID);
@@ -530,6 +539,9 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
 
   } catch (error) {
     console.error("Error reviving player:", error);
+  }
+}
+
 /**
  * Fetches a player from the room by user ID
  * Admin SDK version of fetchPlayerForRoom
@@ -780,6 +792,9 @@ async function remapPlayersBackend(playersNeedingTargets, playersNeedingAssassin
   } catch (err) {
     console.error("Error in remapPlayersBackend:", err);
     throw err;
+  }
+}
+
 /**
  * Sets open season status for a player
  * Admin SDK version of setOpenSznOfPlayerToValueForRoom
