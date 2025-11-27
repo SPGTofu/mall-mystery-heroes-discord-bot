@@ -3,6 +3,8 @@
  * Handles creation, deletion, and assignment of Discord roles
  */
 
+const { ROLES, ROLE_COLORS } = require('../../config/roles');
+
 /**
  * Ensures a guild reference exists
  * @param {Guild} guild
@@ -78,6 +80,7 @@ async function deleteRole(role, reason = 'Role deleted via Mall Mystery Heroes b
  * @param {GuildMember} member - The guild member
  * @param {Role|string} role - The role to assign
  * @returns {Promise<Role>}
+ * @throws {Error} If role cannot be assigned (permissions, hierarchy, etc.)
  */
 async function assignRole(member, role) {
   if (!member) {
@@ -89,8 +92,43 @@ async function assignRole(member, role) {
     throw new Error('Unable to find the specified role to assign.');
   }
 
-  await member.roles.add(resolvedRole);
-  return resolvedRole;
+  try {
+    await member.roles.add(resolvedRole);
+    return resolvedRole;
+  } catch (error) {
+    // Provide more helpful error messages for permission issues
+    if (error.code === 50013) {
+      const botMember = member.guild.members.me;
+      const botHighestRole = botMember?.roles.highest;
+      
+      // Build detailed diagnostic message
+      let diagnosticMessage = `Missing permissions to assign role "${resolvedRole.name}".\n`;
+      
+      if (botMember) {
+        const hasManageRoles = botMember.permissions.has('ManageRoles');
+        diagnosticMessage += `- Bot has "Manage Roles" permission: ${hasManageRoles ? 'Yes' : 'No'}\n`;
+        
+        if (botHighestRole) {
+          diagnosticMessage += `- Bot's highest role: "${botHighestRole.name}" (position: ${botHighestRole.position})\n`;
+          diagnosticMessage += `- Target role "${resolvedRole.name}" position: ${resolvedRole.position}\n`;
+          
+          if (resolvedRole.position >= botHighestRole.position) {
+            diagnosticMessage += `- ❌ Problem: The "${resolvedRole.name}" role is positioned at or above the bot's role!\n`;
+            diagnosticMessage += `  Solution: Move the bot's role above "${resolvedRole.name}" in Server Settings > Roles, or delete and recreate the game roles.`;
+          } else {
+            diagnosticMessage += `- ✅ Hierarchy is correct, but permission error occurred. Check bot permissions.`;
+          }
+        } else {
+          diagnosticMessage += `- Bot has no roles assigned.`;
+        }
+      } else {
+        diagnosticMessage += `- Could not fetch bot member information.`;
+      }
+      
+      throw new Error(diagnosticMessage);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -98,6 +136,7 @@ async function assignRole(member, role) {
  * @param {GuildMember} member - The guild member
  * @param {Role|string} role - The role to remove
  * @returns {Promise<Role>}
+ * @throws {Error} If role cannot be removed (permissions, hierarchy, etc.)
  */
 async function removeRole(member, role) {
   if (!member) {
@@ -109,12 +148,83 @@ async function removeRole(member, role) {
     throw new Error('Unable to find the specified role to remove.');
   }
 
-  await member.roles.remove(resolvedRole);
-  return resolvedRole;
+  try {
+    await member.roles.remove(resolvedRole);
+    return resolvedRole;
+  } catch (error) {
+    // Provide more helpful error messages for permission issues
+    if (error.code === 50013) {
+      const botMember = member.guild.members.me;
+      const botHighestRole = botMember?.roles.highest;
+      
+      // Build detailed diagnostic message
+      let diagnosticMessage = `Missing permissions to remove role "${resolvedRole.name}".\n`;
+      
+      if (botMember) {
+        const hasManageRoles = botMember.permissions.has('ManageRoles');
+        diagnosticMessage += `- Bot has "Manage Roles" permission: ${hasManageRoles ? 'Yes' : 'No'}\n`;
+        
+        if (botHighestRole) {
+          diagnosticMessage += `- Bot's highest role: "${botHighestRole.name}" (position: ${botHighestRole.position})\n`;
+          diagnosticMessage += `- Target role "${resolvedRole.name}" position: ${resolvedRole.position}\n`;
+          
+          if (resolvedRole.position >= botHighestRole.position) {
+            diagnosticMessage += `- ❌ Problem: The "${resolvedRole.name}" role is positioned at or above the bot's role!\n`;
+            diagnosticMessage += `  Solution: Move the bot's role above "${resolvedRole.name}" in Server Settings > Roles, or delete and recreate the game roles.`;
+          } else {
+            diagnosticMessage += `- ✅ Hierarchy is correct, but permission error occurred. Check bot permissions.`;
+          }
+        } else {
+          diagnosticMessage += `- Bot has no roles assigned.`;
+        }
+      } else {
+        diagnosticMessage += `- Could not fetch bot member information.`;
+      }
+      
+      throw new Error(diagnosticMessage);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Repositions an existing role below the bot's highest role
+ * @param {Role} role - The role to reposition
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<boolean>} True if repositioned, false otherwise
+ */
+async function repositionRoleBelowBot(role, guild) {
+  try {
+    const botMember = guild.members.me;
+    if (!botMember || !botMember.roles.highest) {
+      return false;
+    }
+
+    const botHighestRole = botMember.roles.highest;
+    const targetPosition = botHighestRole.position - 1;
+    
+    // Only reposition if the role is currently at or above the bot's role
+    // Position 0 is the lowest, higher numbers are higher in hierarchy
+    const originalPosition = role.position;
+    if (originalPosition >= botHighestRole.position && targetPosition >= 0) {
+      await role.setPosition(targetPosition, {
+        reason: 'Repositioning role below bot for management'
+      });
+      console.log(`Repositioned role "${role.name}" from position ${originalPosition} to ${targetPosition} (below bot's role)`);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn(`Could not reposition role "${role.name}" below bot's role:`, error.message);
+    return false;
+  }
 }
 
 /**
  * Gets or creates a role by name
+ * Automatically positions the role below the bot's highest role to ensure the bot can manage it
+ * Also attempts to fix existing roles that are positioned incorrectly
  * @param {Guild} guild - The Discord guild
  * @param {string} name - Role name
  * @param {Object} options - Role options
@@ -128,10 +238,85 @@ async function getOrCreateRole(guild, name, options = {}) {
 
   const existingRole = guild.roles.cache.find(role => role.name === name);
   if (existingRole) {
+    // Try to fix position if it's above the bot's role
+    await repositionRoleBelowBot(existingRole, guild);
     return existingRole;
   }
 
-  return createRole(guild, name, options);
+  // Calculate the target position to be below the bot's role
+  let targetPosition = 0; // Default to bottom
+  const botMember = guild.members.me;
+  if (botMember && botMember.roles.highest) {
+    const botHighestRole = botMember.roles.highest;
+    // Position should be below the bot's role (position - 1)
+    // But ensure it's at least 0 (can't be negative)
+    targetPosition = Math.max(0, botHighestRole.position - 1);
+  }
+
+  // Create the role with the calculated position
+  // Note: If position is specified and the bot can't set it there, Discord will place it at the bottom
+  const role = await createRole(guild, name, {
+    ...options,
+    position: targetPosition,
+  });
+
+  // Verify the role ended up in the right position, and try to fix if needed
+  // (Sometimes Discord may ignore the position if the bot doesn't have permission)
+  if (role.position >= targetPosition + 1) {
+    // Role ended up higher than intended, try to reposition
+    await repositionRoleBelowBot(role, guild);
+  }
+
+  return role;
+}
+
+/**
+ * Gets or creates the Game Master role
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<Role>}
+ */
+async function getOrCreateGameMasterRole(guild) {
+  return getOrCreateRole(guild, ROLES.GAME_MASTER, {
+    color: ROLE_COLORS.GAME_MASTER,
+    reason: 'Game Master role needed for Mall Mystery Heroes',
+  });
+}
+
+/**
+ * Gets or creates the Player role
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<Role>}
+ */
+async function getOrCreatePlayerRole(guild) {
+  return getOrCreateRole(guild, ROLES.PLAYER, {
+    color: ROLE_COLORS.PLAYER,
+    reason: 'Player role needed for Mall Mystery Heroes',
+  });
+}
+
+/**
+ * Gets or creates the Alive role (with hoist enabled to group members)
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<Role>}
+ */
+async function getOrCreateAliveRole(guild) {
+  return getOrCreateRole(guild, ROLES.ALIVE, {
+    color: ROLE_COLORS.ALIVE,
+    hoist: true, // Display members with this role separately in the member list
+    reason: 'Alive role needed for Mall Mystery Heroes',
+  });
+}
+
+/**
+ * Gets or creates the Dead role
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<Role>}
+ */
+async function getOrCreateDeadRole(guild) {
+  return getOrCreateRole(guild, ROLES.DEAD, {
+    color: ROLE_COLORS.DEAD,
+    reason: 'Dead role needed for Mall Mystery Heroes',
+  });
 }
 
 module.exports = {
@@ -140,5 +325,9 @@ module.exports = {
   assignRole,
   removeRole,
   getOrCreateRole,
+  getOrCreateGameMasterRole,
+  getOrCreatePlayerRole,
+  getOrCreateAliveRole,
+  getOrCreateDeadRole,
 };
 
