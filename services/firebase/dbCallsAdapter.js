@@ -431,10 +431,10 @@ async function killPlayerForRoom(playerIdentifier, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
     
-    // Try to find player by name first, then by userID
-    let snap = await playersRef.where('name', '==', playerIdentifier).get();
+    // Try to find by userID first (Discord ID), then by name as fallback
+    let snap = await playersRef.where('userID', '==', playerIdentifier).get();
     if (snap.empty) {
-      snap = await playersRef.where('userID', '==', playerIdentifier).get();
+      snap = await playersRef.where('name', '==', playerIdentifier).get();
     }
 
     if (snap.empty) {
@@ -964,23 +964,34 @@ async function validatePlayersNotInOtherActiveGames(roomID) {
 /**
  * Fetches targets for a player (including open season players)
  * Admin SDK version of fetchTargetsForPlayer
- * @param {string} playerName - Player name
+ * Accepts either a Discord userID or a player name to identify the player document
+ * @param {string} playerIdentifier - userID (preferred) or player name
  * @param {string} roomID - Room ID
  * @returns {Promise<Array<string>>} Array of target names
  */
-async function fetchTargetsForPlayer(playerName, roomID) {
+async function fetchTargetsForPlayer(playerIdentifier, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
 
+    // Try to find by userID first (Discord ID)
+    let playerSnapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+
+    // Fallback: try to find by name
+    if (playerSnapshot.empty) {
+      playerSnapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
     // Fetch player and open season players in parallel
-    const [playerSnapshot, openSeasonSnapshot] = await Promise.all([
-      playersRef.where('name', '==', playerName).get(),
+    const [_, openSeasonSnapshot] = await Promise.all([
+      Promise.resolve(playerSnapshot),
       playersRef.where('openSeason', '==', true).get()
     ]);
 
     let targets = [];
     if (!playerSnapshot.empty) {
-      const playerTargets = playerSnapshot.docs[0].data().targets || [];
+      const playerData = playerSnapshot.docs[0].data();
+      const playerTargets = playerData.targets || [];
+      const playerName = playerData.name;
       const openSeasonPlayers = openSeasonSnapshot.docs.map(doc => doc.data().name);
 
       // Find if the player is in open season
@@ -1012,17 +1023,25 @@ async function fetchTargetsForPlayer(playerName, roomID) {
 /**
  * Fetches points value of player
  * Admin SDK version of fetchPointsForPlayerInRoom
- * @param {string} playerName - Player name
+ * Accepts either a Discord userID or a player name to identify the player document
+ * @param {string} playerIdentifier - userID (preferred) or player name
  * @param {string} roomID - Room ID
  * @returns {Promise<number>} Player's score
  */
-async function fetchPointsForPlayerInRoom(playerName, roomID) {
+async function fetchPointsForPlayerInRoom(playerIdentifier, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.where('name', '==', playerName).get();
+    
+    // Try to find by userID first (Discord ID)
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+
+    // Fallback: try to find by name
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
 
     if (snapshot.empty) {
-      throw new Error(`Player ${playerName} not found`);
+      throw new Error(`Player ${playerIdentifier} not found`);
     }
 
     return parseInt(snapshot.docs[0].data().score);

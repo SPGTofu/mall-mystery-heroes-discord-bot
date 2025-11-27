@@ -8,12 +8,14 @@ const { createEmbed, createAnnouncement, createErrorAnnouncement } = require('..
 const { ROLES } = require('../../config/roles');
 const CHANNELS = require('../../config/channels');
 const { getChannel } = require('../../services/discord/channels');
+const { removeRole, assignRole } = require('../../services/discord/roles');
 const { ApplicationCommandOptionType } = require("discord.js");
 const { fetchTargetsForPlayer,
     fetchPointsForPlayerInRoom,
     updatePointsForPlayer,
     killPlayerForRoom,
-    updateLogsForRoom } = require('../../services/firebase/dbCallsAdapter');
+    updateLogsForRoom,
+    fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
 
 module.exports = {
   name: 'kill',
@@ -62,7 +64,7 @@ module.exports = {
 
       // 3. Get the Discord guild members
       const assassinMember = await interaction.options.getMember('assassin');
-      const targetMember = interaction.options.getMember('assassin');
+      const targetMember = await interaction.options.getMember('target');
 
       if (!assassinMember) {
         return interaction.reply({
@@ -93,34 +95,94 @@ module.exports = {
         });
       }
 
-      // 5. Validate kill (Check if kill makes sense with Firebase)
+      // 5. Fetch player data from database using user IDs (Discord IDs are permanent, usernames can change)
+      let assassinPlayerDoc, targetPlayerDoc;
+      try {
+        assassinPlayerDoc = await fetchPlayerByUserIdForRoom(assassin.id, roomID);
+      } catch (error) {
+        return interaction.reply({
+          content: `Assassin (${assassinName}) is not registered in this game.`,
+          ephemeral: true
+        });
+      }
+      
+      try {
+        targetPlayerDoc = await fetchPlayerByUserIdForRoom(target.id, roomID);
+      } catch (error) {
+        return interaction.reply({
+          content: `Target (${targetName}) is not registered in this game.`,
+          ephemeral: true
+        });
+      }
+      
+      const assassinPlayerData = assassinPlayerDoc.data();
+      const targetPlayerData = targetPlayerDoc.data();
+      
+      // Use database names (not Discord usernames) for consistency
+      const assassinDbName = assassinPlayerData.name;
+      const targetDbName = targetPlayerData.name;
+      
+      // Get points directly from the player data we already fetched
+      const assassinPoints = parseInt(assassinPlayerData.score || 0);
+      const targetPoints = parseInt(targetPlayerData.score || 0);
+
+      // 6. Validate kill (Check if kill makes sense with Firebase)
       // Check if assassin has target in their targets list
-      const assassinTargets = await fetchTargetsForPlayer(assassinName, roomID);
-      if (!assassinTargets.includes(targetName)) {
+      // Use Discord user ID to fetch targets, but compare against database name
+      let assassinTargets;
+      try {
+        assassinTargets = await fetchTargetsForPlayer(assassin.id, roomID);
+      } catch (error) {
+        console.error('Error fetching targets for assassin:', error);
+        return interaction.reply({
+          content: `Error fetching targets for ${assassinDbName}: ${error.message}`,
+          ephemeral: true
+        });
+      }
+      
+      // Compare against database name, not Discord username
+      if (!assassinTargets.includes(targetDbName)) {
         const message = createErrorAnnouncement(`<@${assassin.id}> does not have <@${target.id}> as a target. Kill not valid.`);
-        await gmChannel.send({ embeds: [message] })
+        await gmChannel.send({ embeds: [message] });
+        return interaction.reply({
+          content: `${assassinDbName} does not have ${targetDbName} as a target. Kill not valid.`,
+          ephemeral: true
+        });
       }
 
-      // 6. Get current points
-      const assassinPoints = await fetchPointsForPlayerInRoom(assassinName, roomID);
-      const targetPoints = await fetchPointsForPlayerInRoom(targetName, roomID);
-
       // 7. Give assassin points (transfer target's points to assassin)
-      await updatePointsForPlayer(assassinName, targetPoints, roomID);
+      // Use Discord user ID, not username
+      await updatePointsForPlayer(assassin.id, targetPoints, roomID);
 
       // 8. Unalive player, set target's points to 0, and reset targets/assassins
-      await killPlayerForRoom(targetName, roomID);
+      // Use Discord user ID, not username
+      await killPlayerForRoom(target.id, roomID);
 
       // 9. Update Discord roles
-      const aliveRole = interaction.guild.roles.cache.find(role => role.name === ROLES.ALIVE);
-      const deadRole = interaction.guild.roles.cache.find(role => role.name === ROLES.DEAD);
+      // Use helper functions that handle role resolution and error handling properly
+      // Pass role names (strings) to the helper functions - they will resolve them properly
+      try {
+        if (targetMember && targetMember.roles) {
+          await removeRole(targetMember, ROLES.ALIVE);
+        }
+      } catch (error) {
+        // If role doesn't exist or can't be removed, log but don't fail the kill
+        console.warn(`Could not remove "${ROLES.ALIVE}" role:`, error.message);
+      }
 
-      await targetMember.roles.remove(aliveRole);
-      await targetMember.roles.add(deadRole);
+      try {
+        if (targetMember && targetMember.roles) {
+          await assignRole(targetMember, ROLES.DEAD);
+        }
+      } catch (error) {
+        // If role doesn't exist or can't be assigned, log but don't fail the kill
+        console.warn(`Could not add "${ROLES.DEAD}" role:`, error.message);
+      }
 
       // 10. Log the kill in Firebase
+      // Use database names for logging (consistent with database records)
       await updateLogsForRoom(
-        `${assassinName} assassinated ${targetName}! ${assassinName} gained ${targetPoints} points.`,
+        `${assassinDbName} assassinated ${targetDbName}! ${assassinDbName} gained ${targetPoints} points.`,
         'red',
         roomID
       );
@@ -132,7 +194,7 @@ module.exports = {
 
       const killEmbed = createEmbed({
         title: '💀 Assassination!',
-        description: `**${assassinName}** has assassinated **${targetName}**!`,
+        description: `**${assassinDbName}** has assassinated **${targetDbName}**!`,
         color: 0xff0000, // Red
         fields: [
           { name: 'Points Transferred', value: `${targetPoints} points`, inline: true },
@@ -147,7 +209,7 @@ module.exports = {
 
       // Reply to the interaction
       await interaction.reply({
-        content: `✅ Kill recorded! ${assassinName} assassinated ${targetName}.`,
+        content: `✅ Kill recorded! ${assassinDbName} assassinated ${targetDbName}.`,
         ephemeral: true
       });
 

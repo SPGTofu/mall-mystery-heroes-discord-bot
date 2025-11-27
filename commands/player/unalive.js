@@ -58,8 +58,7 @@ module.exports = {
     }
 
     try {
-      // TODO: finish once implemented
-      await killPlayerForRoom(playerToBeDead.username, roomID);
+      await killPlayerForRoom(playerToBeDead.id, roomID);
 
       // change status of user on Discord
       await removeRole(member, ROLES.ALIVE);
