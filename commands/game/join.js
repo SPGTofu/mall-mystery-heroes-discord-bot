@@ -76,9 +76,20 @@ module.exports = {
       // Get or create Alive role (with hoist enabled to group members)
       const aliveRole = await getOrCreateAliveRole(guild);
 
-      // Assign roles
-      await assignRole(member, playerRole);
-      await assignRole(member, aliveRole);
+      // Assign roles (with error handling for permission issues)
+      try {
+        await assignRole(member, playerRole);
+      } catch (error) {
+        console.warn(`Could not assign player role to ${member.user.tag}:`, error);
+        // Continue - role assignment failure shouldn't block joining
+      }
+
+      try {
+        await assignRole(member, aliveRole);
+      } catch (error) {
+        console.warn(`Could not assign alive role to ${member.user.tag}:`, error);
+        // Continue - role assignment failure shouldn't block joining
+      }
 
       // Change user's nickname to their real name
       try {
