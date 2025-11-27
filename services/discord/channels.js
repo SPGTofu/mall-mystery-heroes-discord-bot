@@ -40,6 +40,25 @@ async function deleteChannel(channel) {
 }
 
 /**
+ * Gets a channel by name (does not create if not found)
+ * @param {Guild} guild - The Discord guild
+ * @param {string} name - Channel name
+ * @param {number} channelType - Optional channel type (default: 0 for text channel)
+ * @returns {Channel|null} The channel if found, null otherwise
+ */
+function getChannel(guild, name, channelType = 0) {
+  if (!name || typeof name !== 'string') {
+    return null;
+  }
+  
+  return guild.channels.cache.find(
+    ch => ch && ch.name && typeof ch.name === 'string' && 
+         ch.name.toLowerCase() === name.toLowerCase() && 
+         ch.type === channelType
+  ) || null;
+}
+
+/**
  * Gets or creates a channel by name
  * @param {Guild} guild - The Discord guild
  * @param {string} name - Channel name
@@ -54,11 +73,7 @@ async function getOrCreateChannel(guild, name, options = {}) {
   
   // Try to find existing channel
   const channelType = options.type || 0;
-  const channel = guild.channels.cache.find(
-    ch => ch && ch.name && typeof ch.name === 'string' && 
-         ch.name.toLowerCase() === name.toLowerCase() && 
-         ch.type === channelType
-  );
+  const channel = getChannel(guild, name, channelType);
   
   if (channel) {
     return channel;
@@ -68,9 +83,28 @@ async function getOrCreateChannel(guild, name, options = {}) {
   return await createChannel(guild, name, options);
 }
 
+/**
+ * Finds a channel by name
+ * @param {Guild} guild - The Discord guild
+ * @param {string} name - Channel name
+ * @returns {Channel|null} The channel if found, null otherwise
+ */
+function findChannelByName(guild, name) {
+  if (!name || typeof name !== 'string') {
+    return null;
+  }
+  
+  return guild.channels.cache.find(
+    ch => ch && ch.name && typeof ch.name === 'string' && 
+         ch.name.toLowerCase() === name.toLowerCase()
+  ) || null;
+}
+
 module.exports = {
   createChannel,
   deleteChannel,
+  getChannel,
   getOrCreateChannel,
+  findChannelByName,
 };
 

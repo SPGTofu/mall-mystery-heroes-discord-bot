@@ -98,11 +98,12 @@ async function registerCommands(client) {
         name: command.name,
         description: command.description || 'No description',
       };
-
-      if (Array.isArray(command.options) && command.options.length > 0) {
+      
+      // Add options if command defines them
+      if (command.options && Array.isArray(command.options)) {
         subcommandData.options = command.options;
       }
-
+      
       groups.get(groupName).push(subcommandData);
     } else {
       // This is a standalone command
@@ -110,11 +111,12 @@ async function registerCommands(client) {
         name: command.name,
         description: command.description || 'No description',
       };
-
-      if (Array.isArray(command.options) && command.options.length > 0) {
+      
+      // Add options if command defines them
+      if (command.options && Array.isArray(command.options)) {
         commandData.options = command.options;
       }
-
+      
       if (command.default_member_permissions) {
         commandData.default_member_permissions = command.default_member_permissions;
       }

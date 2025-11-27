@@ -77,6 +77,26 @@ async function endGame(roomID) {
 }
 
 /**
+ * Fetches all players for a room (regardless of alive status)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player documents with data
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ref: doc.ref,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching all players:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetches all alive players for a room
  * @param {string} roomID - Room ID
  * @returns {Promise<Array<string>>} Array of player names
@@ -88,6 +108,100 @@ async function fetchAlivePlayersForRoom(roomID) {
     return snapshot.docs.map(doc => doc.data().name);
   } catch (error) {
     console.error('Error fetching alive players:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches all players for a room with their data, sorted by score (descending)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player data objects with name, score, isAlive
+ */
+async function fetchAllPlayersWithScores(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    
+    const players = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        name: data.name || 'Unknown',
+        score: data.score || 0,
+        isAlive: data.isAlive || false,
+      };
+    });
+    
+    // Sort by score descending, then by isAlive (alive players first)
+    players.sort((a, b) => {
+      if (a.isAlive !== b.isAlive) {
+        return b.isAlive ? 1 : -1; // Alive players first
+      }
+      return b.score - a.score; // Higher score first
+    });
+    
+    return players;
+  } catch (error) {
+    console.error('Error fetching all players with scores:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gets a player by user ID
+ * @param {string} userID - Discord user ID
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.DocumentSnapshot|null>} Player document snapshot or null if not found
+ */
+async function getPlayerByUserID(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).get();
+    
+    if (snapshot.empty) {
+      return null;
+    }
+    
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error('Error getting player by user ID:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches every player document for a room
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<FirebaseFirestore.QueryDocumentSnapshot>>}
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs;
+  } catch (error) {
+    console.error('Error fetching players:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a player document based on Discord user ID
+ * @param {string} userID - Discord user ID
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.QueryDocumentSnapshot>}
+ */
+async function fetchPlayerByUserIdForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).limit(1).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player with user ID ${userID} not found in room ${roomID}.`);
+    }
+
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error(`Error fetching player by user ID ${userID}:`, error);
     throw error;
   }
 }
@@ -126,6 +240,97 @@ async function addPlayerForRoom(playerName, userID, roomID) {
     });
   } catch (error) {
     console.error('Error adding player:', error);
+    throw error;
+  }
+}
+
+/**
+ * Updates a player's points (Admin SDK)
+ * Accepts either a Discord userID or a player name to identify the player document
+ * @param {string} playerIdentifier - userID or player name
+ * @param {number} points - points to add
+ * @param {string} roomID
+ * @returns {Promise<number>} new points total
+ */
+async function updatePointsForPlayer(playerIdentifier, points, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try to find by userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+
+    // Fallback: try to find by name
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) {
+      throw new Error(`Player not found: ${playerIdentifier}`);
+    }
+
+    const playerDoc = snapshot.docs[0];
+    const currScore = parseInt(playerDoc.data().score) || 0;
+    const newScore = currScore + Number(points || 0);
+
+    await playerDoc.ref.update({ score: newScore });
+    return newScore;
+  } catch (error) {
+    console.error('Error updating player points:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sets a player's score to an exact value (Admin SDK)
+ * @param {string} playerIdentifier - userID or player name
+ * @param {number} points - absolute points value to set
+ * @param {string} roomID
+ * @returns {Promise<number>} new points total
+ */
+async function setPointsForPlayer(playerIdentifier, points, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try by userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
+
+    const playerDoc = snapshot.docs[0];
+    await playerDoc.ref.update({ score: Number(points || 0) });
+    return Number(points || 0);
+  } catch (error) {
+    console.error('Error setting player points:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sets the 'isAlive' flag for a player (Admin SDK)
+ * @param {string} playerIdentifier - userID or player name
+ * @param {boolean} isAlive
+ * @param {string} roomID
+ * @returns {Promise<void>}
+ */
+async function setIsAliveForPlayer(playerIdentifier, isAlive, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
+
+    const playerDoc = snapshot.docs[0];
+    await playerDoc.ref.update({ isAlive: Boolean(isAlive) });
+  } catch (error) {
+    console.error('Error setting player isAlive:', error);
     throw error;
   }
 }
@@ -325,6 +530,25 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
 
   } catch (error) {
     console.error("Error reviving player:", error);
+/**
+ * Fetches a player from the room by user ID
+ * Admin SDK version of fetchPlayerForRoom
+ * @param {string} userID - Discord user ID (unique identifier)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.DocumentSnapshot>} Player document
+ */
+async function fetchPlayerForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).get();
+    
+    if (snapshot.empty) {
+      throw new Error(`Player with userID "${userID}" not found in the game.`);
+    }
+    
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error(`Error fetching player with userID ${userID}:`, error);
     throw error;
   }
 }
@@ -556,6 +780,185 @@ async function remapPlayersBackend(playersNeedingTargets, playersNeedingAssassin
   } catch (err) {
     console.error("Error in remapPlayersBackend:", err);
     throw err;
+/**
+ * Sets open season status for a player
+ * Admin SDK version of setOpenSznOfPlayerToValueForRoom
+ * @param {string} userID - Discord user ID (unique identifier)
+ * @param {boolean} value - Open season value (true/false)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<void>}
+ */
+async function setOpenSeasonForPlayer(userID, value, roomID) {
+  try {
+    const playerDoc = await fetchPlayerForRoom(userID, roomID);
+    await playerDoc.ref.update({
+      openSeason: value,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error(`Error setting open season for userID ${userID}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Checks if a player is in open season
+ * Admin SDK version of checkOpenSzn
+ * @param {string} userID - Discord user ID (unique identifier)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<boolean>} True if player is in open season
+ */
+async function checkOpenSeason(userID, roomID) {
+  try {
+    const playerDoc = await fetchPlayerForRoom(userID, roomID);
+    const playerData = playerDoc.data();
+    return playerData.openSeason === true;
+  } catch (error) {
+    console.error(`Error checking open season for userID ${userID}:`, error);
+  }
+}
+
+/**
+ * Removes a player from the room (deletes the player document)
+ * @param {string} userID - Discord user ID (unique identifier)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<void>}
+ */
+async function removePlayerForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player with userID ${userID} not found`);
+    }
+
+    const playerDoc = snapshot.docs[0];
+    const playerData = playerDoc.data();
+    const playerName = playerData.name;
+
+    // Kill the player first (unmaps targets/assassins and updates the document)
+    await killPlayerForRoom(playerName, roomID);
+
+    // Delete the player document
+    await playerDoc.ref.delete();
+
+    console.log(`Player ${playerName} (userID: ${userID}) removed from room ${roomID}.`);
+  } catch (error) {
+    console.error('Error removing player:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generates and assigns targets to all players in a room
+ * Uses the target assignment service to generate targets, then updates the database
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Map>} Map of playerName -> array of target names
+ */
+async function generateAndAssignTargets(roomID) {
+  try {
+    const { generateTargets } = require('../game/targetAssignment');
+    
+    // Fetch all players
+    const players = await fetchAllPlayersForRoom(roomID);
+    const playerNames = players.map(p => p.name);
+    
+    if (playerNames.length === 0) {
+      throw new Error('No players found in room');
+    }
+    
+    // Generate targets using the service
+    const { targetMap, playerData } = generateTargets(playerNames);
+    
+    // Update database with targets and assassins
+    for (const playerName of playerNames) {
+      const playerAssassins = playerData[playerName]?.assassins || [];
+      await updateTargetsForPlayer(playerName, targetMap.get(playerName) || [], roomID);
+      await updateAssassinsForPlayer(playerName, playerAssassins, roomID);
+    }
+    
+    return targetMap;
+  } catch (error) {
+    console.error('Error generating and assigning targets:', error);
+    throw error;
+  }
+}
+
+/**
+ * Checks if a user is in any other active game (excluding the current room)
+ * @param {string} userID - Discord user ID
+ * @param {string} currentRoomID - Current room ID to exclude from check
+ * @returns {Promise<{isInOtherGame: boolean, roomID: string|null}>} Object indicating if user is in another game and which room
+ */
+async function checkUserInOtherActiveGame(userID, currentRoomID) {
+  try {
+    // Get all rooms
+    const roomsSnapshot = await db.collection('rooms').get();
+    
+    for (const roomDoc of roomsSnapshot.docs) {
+      const roomID = roomDoc.id;
+      
+      // Skip the current room
+      if (roomID === currentRoomID) {
+        continue;
+      }
+      
+      // Check if this room has an active game
+      const roomData = roomDoc.data();
+      if (!roomData.isGameActive) {
+        continue;
+      }
+      
+      // Check if user is a player in this room
+      const playersRef = roomDoc.ref.collection('players');
+      const playerSnapshot = await playersRef.where('userID', '==', userID).get();
+      
+      if (!playerSnapshot.empty) {
+        return { isInOtherGame: true, roomID: roomID };
+      }
+    }
+    
+    return { isInOtherGame: false, roomID: null };
+  } catch (error) {
+    console.error('Error checking user in other active game:', error);
+    throw error;
+  }
+}
+
+/**
+ * Validates that all players in a room are not in any other active game
+ * @param {string} roomID - Room ID to validate players for
+ * @returns {Promise<{isValid: boolean, conflicts: Array<{userID: string, name: string, otherRoomID: string}>}>}
+ */
+async function validatePlayersNotInOtherActiveGames(roomID) {
+  try {
+    const players = await fetchAllPlayersForRoom(roomID);
+    const conflicts = [];
+    
+    for (const player of players) {
+      const userID = player.userID;
+      if (!userID) {
+        continue; // Skip players without userID
+      }
+      
+      const checkResult = await checkUserInOtherActiveGame(userID, roomID);
+      if (checkResult.isInOtherGame) {
+        conflicts.push({
+          userID: userID,
+          name: player.name,
+          otherRoomID: checkResult.roomID
+        });
+      }
+    }
+    
+    return {
+      isValid: conflicts.length === 0,
+      conflicts: conflicts
+    };
+  } catch (error) {
+    console.error('Error validating players not in other active games:', error);
+    throw error;
   }
 }
 
@@ -564,12 +967,27 @@ module.exports = {
   createOrUpdateRoom,
   getRoom,
   endGame,
+  fetchAllPlayersForRoom,
   fetchAlivePlayersForRoom,
+  fetchAllPlayersWithScores,
   addPlayerForRoom,
+  updatePointsForPlayer,
+  setPointsForPlayer,
+  setIsAliveForPlayer,
   updateTargetsForPlayer,
   updateAssassinsForPlayer,
   unmapPlayers,
   killPlayerForRoom,
   handleReviveForPlayer,
   remapPlayersBackend,
+  fetchPlayerForRoom,
+  fetchPlayerByUserIdForRoom,
+  fetchAllPlayersForRoom,
+  setOpenSeasonForPlayer,
+  checkOpenSeason,
+  getPlayerByUserID,
+  removePlayerForRoom,
+  generateAndAssignTargets,
+  checkUserInOtherActiveGame,
+  validatePlayersNotInOtherActiveGames,
 };

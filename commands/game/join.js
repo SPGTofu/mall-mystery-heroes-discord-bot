@@ -6,12 +6,12 @@
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { isGameMaster, isAdmin } = require('../../services/discord/permissions');
 const { getRoom, addPlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
-const { getOrCreateRole, assignRole } = require('../../services/discord/roles');
+const { getOrCreatePlayerRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
 const { createChannel } = require('../../services/discord/channels');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const CHANNELS = require('../../config/channels');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'join',
@@ -71,10 +71,10 @@ module.exports = {
       }
 
       // Get or create Player role
-      const playerRole = await getOrCreateRole(guild, ROLES.PLAYER);
+      const playerRole = await getOrCreatePlayerRole(guild);
       
-      // Get or create Alive role
-      const aliveRole = await getOrCreateRole(guild, ROLES.ALIVE);
+      // Get or create Alive role (with hoist enabled to group members)
+      const aliveRole = await getOrCreateAliveRole(guild);
 
       // Assign roles
       await assignRole(member, playerRole);
@@ -116,7 +116,7 @@ module.exports = {
         },
         {
           id: guild.members.me.id, // Bot
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages],
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageChannels],
         },
       ];
 

@@ -5,13 +5,13 @@
 
 const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
-const { db } = require('../../services/firebase/config');
+const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { createChannel, deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateRole, deleteRole } = require('../../services/discord/roles');
+const { getOrCreateGameMasterRole, deleteRole } = require('../../services/discord/roles');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'create',
@@ -29,8 +29,7 @@ module.exports = {
       const roomID = guild.id; // Use guild ID as room ID
 
       // Check if room already exists
-      const roomRef = db.collection('rooms').doc(roomID);
-      const roomSnapshot = await roomRef.get();
+      const roomSnapshot = await getRoom(roomID);
       
       if (roomSnapshot.exists) {
         // Room exists, clear existing data
@@ -38,12 +37,14 @@ module.exports = {
       } else {
         // Create new room
         await interaction.editReply('Creating new game room...');
-        await roomRef.set({
-          isGameActive: false,
-          taskIndex: 0,
-          logs: []
-        });
       }
+
+      // Create or update room with initial data
+      await createOrUpdateRoom(roomID, {
+        isGameActive: false,
+        taskIndex: 0,
+        logs: []
+      });
 
       // Remove all channels/categories except general
       await interaction.editReply('Cleaning up channels...');
@@ -104,7 +105,7 @@ module.exports = {
       await interaction.editReply('Creating Game Masters channel...');
       
       // Get or create GM role
-      const gmRole = await getOrCreateRole(guild, ROLES.GAME_MASTER);
+      const gmRole = await getOrCreateGameMasterRole(guild);
       
       // Create Game Masters channel with permissions
       const gameMastersChannel = await getOrCreateChannel(guild, CHANNELS.GAME_MASTERS, {
