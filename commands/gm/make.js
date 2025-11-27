@@ -6,9 +6,8 @@
 const { ApplicationCommandOptionType, PermissionFlagsBits, DiscordAPIError } = require('discord.js');
 const { canPerformAdminActions } = require('../../utils/permissions');
 const { PermissionError, ValidationError } = require('../../utils/errors');
-const ROLES = require('../../config/roles');
-const { getOrCreateRole } = require('../../services/discord/roles');
-const { getPlayerByUserID } = require('../../services/firebase/dbCallsAdapter');
+const { ROLES } = require('../../config/roles');
+const { getOrCreateGameMasterRole } = require('../../services/discord/roles');
 
 module.exports = {
   name: 'make',
@@ -59,10 +58,7 @@ module.exports = {
       role => role.id !== guild.id && role.editable
     );
 
-    const gmRole = await getOrCreateRole(guild, ROLES.GAME_MASTER, {
-      mentionable: true,
-      reason: 'Ensuring Game Master role exists for promotion',
-    });
+    const gmRole = await getOrCreateGameMasterRole(guild);
 
     try {
       await guild.members.fetch();

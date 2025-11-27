@@ -77,6 +77,26 @@ async function endGame(roomID) {
 }
 
 /**
+ * Fetches all players for a room (regardless of alive status)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player documents with data
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ref: doc.ref,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching all players:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetches all alive players for a room
  * @param {string} roomID - Room ID
  * @returns {Promise<Array<string>>} Array of player names
@@ -547,11 +567,124 @@ async function removePlayerForRoom(userID, roomID) {
   }
 }
 
+/**
+ * Generates and assigns targets to all players in a room
+ * Uses the target assignment service to generate targets, then updates the database
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Map>} Map of playerName -> array of target names
+ */
+async function generateAndAssignTargets(roomID) {
+  try {
+    const { generateTargets } = require('../game/targetAssignment');
+    
+    // Fetch all players
+    const players = await fetchAllPlayersForRoom(roomID);
+    const playerNames = players.map(p => p.name);
+    
+    if (playerNames.length === 0) {
+      throw new Error('No players found in room');
+    }
+    
+    // Generate targets using the service
+    const { targetMap, playerData } = generateTargets(playerNames);
+    
+    // Update database with targets and assassins
+    for (const playerName of playerNames) {
+      const playerAssassins = playerData[playerName]?.assassins || [];
+      await updateTargetsForPlayer(playerName, targetMap.get(playerName) || [], roomID);
+      await updateAssassinsForPlayer(playerName, playerAssassins, roomID);
+    }
+    
+    return targetMap;
+  } catch (error) {
+    console.error('Error generating and assigning targets:', error);
+    throw error;
+  }
+}
+
+/**
+ * Checks if a user is in any other active game (excluding the current room)
+ * @param {string} userID - Discord user ID
+ * @param {string} currentRoomID - Current room ID to exclude from check
+ * @returns {Promise<{isInOtherGame: boolean, roomID: string|null}>} Object indicating if user is in another game and which room
+ */
+async function checkUserInOtherActiveGame(userID, currentRoomID) {
+  try {
+    // Get all rooms
+    const roomsSnapshot = await db.collection('rooms').get();
+    
+    for (const roomDoc of roomsSnapshot.docs) {
+      const roomID = roomDoc.id;
+      
+      // Skip the current room
+      if (roomID === currentRoomID) {
+        continue;
+      }
+      
+      // Check if this room has an active game
+      const roomData = roomDoc.data();
+      if (!roomData.isGameActive) {
+        continue;
+      }
+      
+      // Check if user is a player in this room
+      const playersRef = roomDoc.ref.collection('players');
+      const playerSnapshot = await playersRef.where('userID', '==', userID).get();
+      
+      if (!playerSnapshot.empty) {
+        return { isInOtherGame: true, roomID: roomID };
+      }
+    }
+    
+    return { isInOtherGame: false, roomID: null };
+  } catch (error) {
+    console.error('Error checking user in other active game:', error);
+    throw error;
+  }
+}
+
+/**
+ * Validates that all players in a room are not in any other active game
+ * @param {string} roomID - Room ID to validate players for
+ * @returns {Promise<{isValid: boolean, conflicts: Array<{userID: string, name: string, otherRoomID: string}>}>}
+ */
+async function validatePlayersNotInOtherActiveGames(roomID) {
+  try {
+    const players = await fetchAllPlayersForRoom(roomID);
+    const conflicts = [];
+    
+    for (const player of players) {
+      const userID = player.userID;
+      if (!userID) {
+        continue; // Skip players without userID
+      }
+      
+      const checkResult = await checkUserInOtherActiveGame(userID, roomID);
+      if (checkResult.isInOtherGame) {
+        conflicts.push({
+          userID: userID,
+          name: player.name,
+          otherRoomID: checkResult.roomID
+        });
+      }
+    }
+    
+    return {
+      isValid: conflicts.length === 0,
+      conflicts: conflicts
+    };
+  } catch (error) {
+    console.error('Error validating players not in other active games:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
   getRoom,
   endGame,
+  fetchAllPlayersForRoom,
   fetchAlivePlayersForRoom,
   fetchAllPlayersWithScores,
   addPlayerForRoom,
@@ -569,4 +702,7 @@ module.exports = {
   checkOpenSeason,
   getPlayerByUserID,
   removePlayerForRoom,
+  generateAndAssignTargets,
+  checkUserInOtherActiveGame,
+  validatePlayersNotInOtherActiveGames,
 };
