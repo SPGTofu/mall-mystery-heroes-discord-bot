@@ -153,6 +153,97 @@ async function addPlayerForRoom(playerName, userID, roomID) {
 }
 
 /**
+ * Updates a player's points (Admin SDK)
+ * Accepts either a Discord userID or a player name to identify the player document
+ * @param {string} playerIdentifier - userID or player name
+ * @param {number} points - points to add
+ * @param {string} roomID
+ * @returns {Promise<number>} new points total
+ */
+async function updatePointsForPlayer(playerIdentifier, points, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try to find by userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+
+    // Fallback: try to find by name
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) {
+      throw new Error(`Player not found: ${playerIdentifier}`);
+    }
+
+    const playerDoc = snapshot.docs[0];
+    const currScore = parseInt(playerDoc.data().score) || 0;
+    const newScore = currScore + Number(points || 0);
+
+    await playerDoc.ref.update({ score: newScore });
+    return newScore;
+  } catch (error) {
+    console.error('Error updating player points:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sets a player's score to an exact value (Admin SDK)
+ * @param {string} playerIdentifier - userID or player name
+ * @param {number} points - absolute points value to set
+ * @param {string} roomID
+ * @returns {Promise<number>} new points total
+ */
+async function setPointsForPlayer(playerIdentifier, points, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try by userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
+
+    const playerDoc = snapshot.docs[0];
+    await playerDoc.ref.update({ score: Number(points || 0) });
+    return Number(points || 0);
+  } catch (error) {
+    console.error('Error setting player points:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sets the 'isAlive' flag for a player (Admin SDK)
+ * @param {string} playerIdentifier - userID or player name
+ * @param {boolean} isAlive
+ * @param {string} roomID
+ * @returns {Promise<void>}
+ */
+async function setIsAliveForPlayer(playerIdentifier, isAlive, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Try userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+    if (snapshot.empty) {
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
+    }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
+
+    const playerDoc = snapshot.docs[0];
+    await playerDoc.ref.update({ isAlive: Boolean(isAlive) });
+  } catch (error) {
+    console.error('Error setting player isAlive:', error);
+    throw error;
+  }
+}
+
+/**
  * Updates targets for a player
  * @param {string} playerName - Player name
  * @param {Array<string>} targets - Array of target names
@@ -404,6 +495,9 @@ module.exports = {
   endGame,
   fetchAlivePlayersForRoom,
   addPlayerForRoom,
+  updatePointsForPlayer,
+  setPointsForPlayer,
+  setIsAliveForPlayer,
   updateTargetsForPlayer,
   updateAssassinsForPlayer,
   unmapPlayers,
