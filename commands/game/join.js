@@ -154,7 +154,7 @@ module.exports = {
       });
 
       await dmChannel.send({ embeds: [welcomeEmbed] });
-      await dmChannel.send(`<@${member.id}>, please @Game Master here to test that everything is working before the game starts!`);
+      await dmChannel.send(`<@${member.id}>, if you need anything from the Game Masters, just @Game Masters here to get their attention. You can test it out now!`);
 
       await interaction.editReply(`✅ Successfully joined the game as **${playerName}**! Check your DM channel in the DMs category.`);
 
