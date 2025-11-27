@@ -95,7 +95,7 @@ module.exports = {
   description: 'Fetch player information for Game Masters',
   options: [
     {
-      name: 'target',
+      name: 'player',
       description: 'Mention a player or use @everyone to fetch all players',
       type: ApplicationCommandOptionType.Mentionable,
       required: true,
@@ -113,7 +113,7 @@ module.exports = {
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      const mentionable = interaction.options.getMentionable('target', true);
+      const mentionable = interaction.options.getMentionable('player', true);
       const roomID = interaction.guildId;
 
       const roomSnapshot = await getRoom(roomID);
