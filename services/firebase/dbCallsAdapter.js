@@ -269,6 +269,81 @@ async function killPlayerForRoom(playerName, roomID) {
   }
 }
 
+/**
+ * Fetches a player from the room by name
+ * Tries trimmed name first, then exact name match
+ * Admin SDK version of fetchPlayerForRoom
+ * @param {string} playerName - Player name
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.DocumentSnapshot>} Player document
+ */
+async function fetchPlayerForRoom(playerName, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const trimmedLowercaseName = playerName.replace(/\s/g, '').toLowerCase();
+    
+    // Try to find player by trimmed name first (most reliable)
+    let playerQuery = await playersRef
+      .where('trimmedNameLowerCase', '==', trimmedLowercaseName)
+      .get();
+
+    // If not found, try exact name match
+    if (playerQuery.empty) {
+      playerQuery = await playersRef
+        .where('name', '==', playerName)
+        .get();
+    }
+    
+    if (playerQuery.empty) {
+      throw new Error(`Player "${playerName}" not found in the game.`);
+    }
+    
+    return playerQuery.docs[0];
+  } catch (error) {
+    console.error(`Error fetching player ${playerName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Sets open season status for a player
+ * Admin SDK version of setOpenSznOfPlayerToValueForRoom
+ * @param {string} playerName - Player name
+ * @param {boolean} value - Open season value (true/false)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<void>}
+ */
+async function setOpenSeasonForPlayer(playerName, value, roomID) {
+  try {
+    const playerDoc = await fetchPlayerForRoom(playerName, roomID);
+    await playerDoc.ref.update({
+      openSeason: value,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error(`Error setting open season for ${playerName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Checks if a player is in open season
+ * Admin SDK version of checkOpenSzn
+ * @param {string} playerName - Player name
+ * @param {string} roomID - Room ID
+ * @returns {Promise<boolean>} True if player is in open season
+ */
+async function checkOpenSeason(playerName, roomID) {
+  try {
+    const playerDoc = await fetchPlayerForRoom(playerName, roomID);
+    const playerData = playerDoc.data();
+    return playerData.openSeason === true;
+  } catch (error) {
+    console.error(`Error checking open season for ${playerName}:`, error);
+    throw error;
+  }
+}
+
 module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
@@ -280,4 +355,7 @@ module.exports = {
   updateAssassinsForPlayer,
   unmapPlayers,
   killPlayerForRoom,
+  fetchPlayerForRoom,
+  setOpenSeasonForPlayer,
+  checkOpenSeason,
 };

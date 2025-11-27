@@ -13,7 +13,7 @@ const GAME_RULES = {
   
   // Point system
   POINTS: {
-    KILL_TRANSFER_RATE: 0.5, // 50% of victim's points transferred
+    KILL_TRANSFER_RATE: 1.0, // 100% of victim's points transferred
     MIN_POINTS: 0,
     DEFAULT_STARTING_POINTS: 0,
   },
@@ -26,7 +26,7 @@ const GAME_RULES = {
   
   // Game state rules
   MIN_PLAYERS_TO_START: 3,
-  MAX_PLAYERS: 100,
+  // MAX_PLAYERS: 100, -- NO LIMIT
 };
 
 module.exports = GAME_RULES;
