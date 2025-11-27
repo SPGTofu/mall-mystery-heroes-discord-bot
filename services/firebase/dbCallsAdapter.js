@@ -440,13 +440,13 @@ async function unmapPlayers(selectedPlayerName, roomID) {
 
 /**
  * Kills a player in a room (Admin SDK version)
- * @param {string} playerName
+ * @param {string} playerId
  * @param {string} roomID
  */
-async function killPlayerForRoom(playerName, roomID) {
+async function killPlayerForRoom(playerId, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snap = await playersRef.where('name', '==', playerName).get();
+    const snap = await playersRef.where('id', '==', playerId).get();
 
     if (snap.empty) {
       throw new Error(`Player ${playerName} not found`);
@@ -474,6 +474,62 @@ async function killPlayerForRoom(playerName, roomID) {
   }
 }
 
+
+/**
+ * Revives a player in a room (Admin SDK)
+ * - Marks player alive
+ * - Adds optional points
+ * - Clears targets/assassins
+ * - Calls backend remap
+ */
+async function handleReviveForPlayer(playerId, roomID, points = 0) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+
+    // Fetch player by userID
+    const snap = await playersRef.where('userID', '==', playerId).get();
+    if (snap.empty) {
+      throw new Error(`Player with userID ${playerId} not found`);
+    }
+
+    const playerDoc = snap.docs[0].ref;
+    const playerData = snap.docs[0].data();
+    const playerName = playerData.name;
+
+    // Mark alive + add points
+    await playerDoc.update({
+      isAlive: true,
+      score: Number(playerData.score || 0) + Number(points),
+      targets: [],
+      targetsLength: 0,
+      assassins: [],
+      assassinsLength: 0,
+    });
+
+    console.log(`Player ${playerName} revived in room ${roomID}.`);
+
+    // Fetch alive players for remap
+    const aliveSnap = await playersRef.where('isAlive', '==', true).get();
+    const alivePlayers = aliveSnap.docs.map(doc => doc.data().name);
+
+    // For now: revived player needs both targets & assassins
+    const playersNeedingTargets = [playerName];
+    const playersNeedingAssassins = [playerName];
+
+    // Backend remap
+    if (typeof remapPlayersBackend === "function") {
+      await remapPlayersBackend(
+        playersNeedingTargets,
+        playersNeedingAssassins,
+        alivePlayers,
+        roomID
+      );
+    }
+
+    return true;
+
+  } catch (error) {
+    console.error("Error reviving player:", error);
 /**
  * Fetches a player from the room by user ID
  * Admin SDK version of fetchPlayerForRoom
@@ -497,6 +553,233 @@ async function fetchPlayerForRoom(userID, roomID) {
   }
 }
 
+
+/**
+ * -------------------------------
+ * BACKEND REMAP HELPERS (STEP 1)
+ * -------------------------------
+ * These replace frontend dbCalls. All Admin SDK only.
+ */
+
+/** Fetch one player's full document + data */
+async function getPlayerData(playerName, roomID) {
+  const playersRef = db.collection('rooms').doc(roomID).collection('players');
+  const snap = await playersRef.where('name', '==', playerName).get();
+  if (snap.empty) return null;
+  return { ref: snap.docs[0].ref, data: snap.docs[0].data() };
+}
+
+/** Fetch all alive player names */
+async function getAlivePlayers(roomID) {
+  const playersRef = db.collection('rooms').doc(roomID).collection('players');
+  const snap = await playersRef.where('isAlive', '==', true).get();
+  return snap.docs.map(doc => doc.data().name);
+}
+
+/** Fetch alive players ordered by assassin count ASC */
+async function getAlivePlayersOrderedByAssassinCount(roomID, excludeName = null) {
+  const playersRef = db.collection('rooms').doc(roomID).collection('players');
+  const snap = await playersRef.where('isAlive', '==', true).orderBy('assassinsLength', 'asc').get();
+  return snap.docs
+    .map(doc => doc.data())
+    .filter(p => p.name !== excludeName);
+}
+
+/** Fetch alive players ordered by target count ASC */
+async function getAlivePlayersOrderedByTargetCount(roomID, excludeName = null) {
+  const playersRef = db.collection('rooms').doc(roomID).collection('players');
+  const snap = await playersRef.where('isAlive', '==', true).orderBy('targetsLength', 'asc').get();
+  return snap.docs
+    .map(doc => doc.data())
+    .filter(p => p.name !== excludeName);
+}
+
+/** Randomize any array */
+function randomizeArrayBackend(array) {
+  for (let i = 0; i < array.length; i++) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+/**
+ * -------------------------------
+ * BACKEND REMAP STEP 2:
+ * handleTargetRegenerationBackend
+ * -------------------------------
+ * Pure Admin SDK rewrite of FE handleTargetRegeneration
+ */
+async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlayers, MAXTARGETS, roomID) {
+  const tempNewTargets = {};
+
+  for (const player of playersNeedingTargets) {
+    const playerInfo = await getPlayerData(player, roomID);
+    if (!playerInfo) {
+      console.error(`Target regen error: player ${player} not found`);
+      continue;
+    }
+
+    const playerData = playerInfo.data;
+    let newTargetArray = [...(playerData.targets || [])];
+
+    const randomizedAlive = randomizeArrayBackend([...alivePlayers]);
+
+    // Primary target search
+    for (const possible of randomizedAlive) {
+      if (possible === player) continue;
+
+      const possibleInfo = await getPlayerData(possible, roomID);
+      if (!possibleInfo) continue;
+      const possibleData = possibleInfo.data;
+
+      if (
+        possibleData.assassinsLength >= MAXTARGETS ||
+        possibleData.targets.includes(player) ||
+        newTargetArray.includes(possible) ||
+        newTargetArray.length >= MAXTARGETS
+      ) {
+        continue;
+      }
+
+      newTargetArray.push(possible);
+
+      // Update assassins for possible target
+      const updatedAssassins = [...possibleData.assassins, player];
+      await updateAssassinsForPlayer(possible, updatedAssassins, roomID);
+    }
+
+    // Fallback - least assassins
+    if (newTargetArray.length < MAXTARGETS) {
+      const fallbackList = await getAlivePlayersOrderedByAssassinCount(roomID, player);
+
+      for (const f of fallbackList) {
+        if (newTargetArray.length >= MAXTARGETS) break;
+
+        if (f.name === player) continue;
+        if (newTargetArray.includes(f.name)) continue;
+
+        newTargetArray.push(f.name);
+        const fAssassinsUpdated = [...f.assassins, player];
+        await updateAssassinsForPlayer(f.name, fAssassinsUpdated, roomID);
+      }
+    }
+
+    // Final write
+    tempNewTargets[player] = newTargetArray.filter(t => !(playerData.targets || []).includes(t));
+    await updateTargetsForPlayer(player, newTargetArray, roomID);
+  }
+
+  return tempNewTargets;
+}
+
+/**
+ * -------------------------------
+ * BACKEND REMAP STEP 3:
+ * handleAssassinRegenerationBackend
+ * -------------------------------
+ * Pure Admin SDK rewrite of FE handleAssassinRegeneration
+ */
+async function handleAssassinRegenerationBackend(playersNeedingAssassins, alivePlayers, MAXTARGETS, roomID) {
+  const tempNewAssassins = {};
+
+  for (const player of playersNeedingAssassins) {
+    const playerInfo = await getPlayerData(player, roomID);
+    if (!playerInfo) {
+      console.error(`Assassin regen error: player ${player} not found`);
+      continue;
+    }
+
+    const playerData = playerInfo.data;
+    let newAssassinArray = [...(playerData.assassins || [])];
+
+    const randomizedAlive = randomizeArrayBackend([...alivePlayers]);
+
+    // Primary assassin search
+    for (const possible of randomizedAlive) {
+      if (possible === player) continue;
+
+      const possibleInfo = await getPlayerData(possible, roomID);
+      if (!possibleInfo) continue;
+      const possibleData = possibleInfo.data;
+
+      if (
+        possibleData.targetsLength >= MAXTARGETS ||
+        possibleData.assassins.includes(player) ||
+        newAssassinArray.includes(possible) ||
+        newAssassinArray.length >= MAXTARGETS
+      ) {
+        continue;
+      }
+
+      newAssassinArray.push(possible);
+
+      // Update the target's targets field
+      const updatedTargets = [...possibleData.targets, player];
+      await updateTargetsForPlayer(possible, updatedTargets, roomID);
+    }
+
+    // Fallback — least targets
+    if (newAssassinArray.length < MAXTARGETS) {
+      const fallbackList = await getAlivePlayersOrderedByTargetCount(roomID, player);
+
+      for (const f of fallbackList) {
+        if (newAssassinArray.length >= MAXTARGETS) break;
+
+        if (f.name === player) continue;
+        if (newAssassinArray.includes(f.name)) continue;
+
+        newAssassinArray.push(f.name);
+
+        const updatedTargets = [...f.targets, player];
+        await updateTargetsForPlayer(f.name, updatedTargets, roomID);
+      }
+    }
+
+    tempNewAssassins[player] = newAssassinArray.filter(t => !(playerData.assassins || []).includes(t));
+    await updateAssassinsForPlayer(player, newAssassinArray, roomID);
+  }
+
+  return tempNewAssassins;
+}
+
+/**
+ * -------------------------------
+ * BACKEND REMAP STEP 4:
+ * remapPlayersBackend (orchestrator)
+ * -------------------------------
+ * Mirrors FE handleRegeneration()
+ */
+async function remapPlayersBackend(playersNeedingTargets, playersNeedingAssassins, alivePlayers, roomID) {
+  try {
+    // Determine MAXTARGETS exactly like FE logic
+    const MAXTARGETS =
+      alivePlayers.length > 15 ? 3 :
+      alivePlayers.length > 5  ? 2 :
+                                 1;
+
+    // Run target regeneration
+    const newTargets = await handleTargetRegenerationBackend(
+      playersNeedingTargets,
+      alivePlayers,
+      MAXTARGETS,
+      roomID
+    );
+
+    // Run assassin regeneration
+    const newAssassins = await handleAssassinRegenerationBackend(
+      playersNeedingAssassins,
+      alivePlayers,
+      MAXTARGETS,
+      roomID
+    );
+
+    console.log("Backend remap complete:", { newTargets, newAssassins });
+
+    return { newTargets, newAssassins };
+  } catch (err) {
+    console.error("Error in remapPlayersBackend:", err);
+    throw err;
 /**
  * Sets open season status for a player
  * Admin SDK version of setOpenSznOfPlayerToValueForRoom
@@ -695,6 +978,8 @@ module.exports = {
   updateAssassinsForPlayer,
   unmapPlayers,
   killPlayerForRoom,
+  handleReviveForPlayer,
+  remapPlayersBackend,
   fetchPlayerForRoom,
   fetchPlayerByUserIdForRoom,
   fetchAllPlayersForRoom,
