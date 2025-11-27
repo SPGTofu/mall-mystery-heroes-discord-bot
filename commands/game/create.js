@@ -7,11 +7,11 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { createChannel, deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateRole, deleteRole } = require('../../services/discord/roles');
+const { getOrCreateGameMasterRole, deleteRole } = require('../../services/discord/roles');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'create',
@@ -105,7 +105,7 @@ module.exports = {
       await interaction.editReply('Creating Game Masters channel...');
       
       // Get or create GM role
-      const gmRole = await getOrCreateRole(guild, ROLES.GAME_MASTER);
+      const gmRole = await getOrCreateGameMasterRole(guild);
       
       // Create Game Masters channel with permissions
       const gameMastersChannel = await getOrCreateChannel(guild, CHANNELS.GAME_MASTERS, {

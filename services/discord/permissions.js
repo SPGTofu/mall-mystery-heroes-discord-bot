@@ -4,7 +4,7 @@
  */
 
 const { PermissionFlagsBits } = require('discord.js');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 /**
  * Checks if a member has admin permissions

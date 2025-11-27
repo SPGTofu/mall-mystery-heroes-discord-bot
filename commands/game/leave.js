@@ -5,11 +5,11 @@
 
 const { GameError, handleError } = require('../../utils/errors');
 const { getRoom, getPlayerByUserID, removePlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
-const { getOrCreateRole, removeRole } = require('../../services/discord/roles');
+const { getOrCreatePlayerRole, getOrCreateAliveRole, getOrCreateDeadRole, removeRole } = require('../../services/discord/roles');
 const { deleteChannel } = require('../../services/discord/channels');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'leave',
@@ -45,7 +45,7 @@ module.exports = {
       await removePlayerForRoom(userID, roomID);
 
       // Remove player role
-      const playerRole = await getOrCreateRole(guild, ROLES.PLAYER);
+      const playerRole = await getOrCreatePlayerRole(guild);
       try {
         await removeRole(member, playerRole);
       } catch (error) {
@@ -53,7 +53,7 @@ module.exports = {
       }
 
       // Remove alive role
-      const aliveRole = await getOrCreateRole(guild, ROLES.ALIVE);
+      const aliveRole = await getOrCreateAliveRole(guild);
       try {
         await removeRole(member, aliveRole);
       } catch (error) {
@@ -61,7 +61,7 @@ module.exports = {
       }
 
       // Remove dead role (in case they were already dead)
-      const deadRole = await getOrCreateRole(guild, ROLES.DEAD);
+      const deadRole = await getOrCreateDeadRole(guild);
       try {
         await removeRole(member, deadRole);
       } catch (error) {

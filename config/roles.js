@@ -11,6 +11,21 @@ const ROLES = {
   OPEN_SEASON: 'Open Season'
 };
 
-module.exports = ROLES;
+/**
+ * Role color constants (Discord color integers)
+ * Colors for visual distinction in member list
+ */
+const ROLE_COLORS = {
+  GAME_MASTER: 0x9b59b6, // Purple
+  PLAYER: 0x3498db,      // Blue
+  ALIVE: 0x2ecc71,       // Green
+  DEAD: 0xe74c3c,        // Red
+  OPEN_SEASON: 0xf39c12, // Orange
+};
+
+module.exports = {
+  ROLES,
+  ROLE_COLORS,
+};
 
 

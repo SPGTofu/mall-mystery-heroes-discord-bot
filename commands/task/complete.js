@@ -3,8 +3,9 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, completeTask } = require('../../services/firebase/taskService');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
+const { getOrCreateAliveRole, getOrCreateDeadRole } = require('../../services/discord/roles');
 const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer } = require('../../services/firebase/dbCallsAdapter');
-const ROLES = require('../../config/roles');
+const { ROLES } = require('../../config/roles');
 
 /**
  * /task complete command
@@ -131,8 +132,8 @@ module.exports = {
           try {
             const memberToUpdate = await interaction.guild.members.fetch(playerUser.id).catch(() => null);
             if (memberToUpdate) {
-              const deadRole = interaction.guild.roles.cache.find(r => r.name === ROLES.DEAD);
-              const aliveRole = interaction.guild.roles.cache.find(r => r.name === ROLES.ALIVE);
+              const deadRole = await getOrCreateDeadRole(interaction.guild);
+              const aliveRole = await getOrCreateAliveRole(interaction.guild);
               if (deadRole && memberToUpdate.roles.cache.has(deadRole.id)) {
                 await memberToUpdate.roles.remove(deadRole).catch(err => console.error('Failed to remove Dead role:', err));
               }
