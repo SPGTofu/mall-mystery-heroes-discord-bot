@@ -12,7 +12,7 @@ const {
   createOrUpdateRoom,
   validatePlayersNotInOtherActiveGames
 } = require('../../services/firebase/dbCallsAdapter');
-const { findChannelByName } = require('../../services/discord/channels');
+const { getChannel } = require('../../services/discord/channels');
 const { createEmbed, createAnnouncement } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
@@ -48,7 +48,7 @@ module.exports = {
       // Fetch all players
       await interaction.editReply('Fetching players...');
       const players = await fetchAllPlayersForRoom(roomID);
-      
+      console.log('playeres: ', players)
       if (players.length < GAME_RULES.MIN_PLAYERS_TO_START) {
         throw new GameError(
           `Not enough players to start the game. Minimum ${GAME_RULES.MIN_PLAYERS_TO_START} players required, but only ${players.length} have joined.`
@@ -119,7 +119,7 @@ module.exports = {
       });
 
       // Broadcast game start to general channel
-      const generalChannel = findChannelByName(guild, CHANNELS.GENERAL);
+      const generalChannel = getChannel(guild, CHANNELS.GENERAL);
       if (generalChannel) {
         const announcement = createAnnouncement(
           '🎮 GAME STARTED!',

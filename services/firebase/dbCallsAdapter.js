@@ -530,6 +530,9 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
 
   } catch (error) {
     console.error("Error reviving player:", error);
+  }
+}
+
 /**
  * Fetches a player from the room by user ID
  * Admin SDK version of fetchPlayerForRoom
@@ -780,6 +783,9 @@ async function remapPlayersBackend(playersNeedingTargets, playersNeedingAssassin
   } catch (err) {
     console.error("Error in remapPlayersBackend:", err);
     throw err;
+  }
+}
+
 /**
  * Sets open season status for a player
  * Admin SDK version of setOpenSznOfPlayerToValueForRoom

@@ -3,6 +3,8 @@
  * Handles creation, deletion, and assignment of Discord roles
  */
 
+const { ROLES } = require("../../config/roles");
+
 /**
  * Ensures a guild reference exists
  * @param {Guild} guild
@@ -139,6 +141,6 @@ module.exports = {
   deleteRole,
   assignRole,
   removeRole,
-  getOrCreateRole,
+  getOrCreateRole
 };
 

@@ -53,9 +53,24 @@ function createAnnouncement(title, message) {
   });
 }
 
+/**
+ * Creates an announcement message
+ * @param {string} message - Announcement message
+ * @returns {EmbedBuilder}
+ */
+function createErrorAnnouncement(message) {
+  return createEmbed({
+    title: 'Error',
+    description: message,
+    color: 0xff0000, // Red
+    timestamp: new Date(),
+  });
+}
+
 module.exports = {
   createEmbed,
   sendDM,
   createAnnouncement,
+  createErrorAnnouncement
 };
 

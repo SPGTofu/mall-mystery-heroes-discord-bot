@@ -6,7 +6,7 @@
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { isGameMaster, isAdmin } = require('../../services/discord/permissions');
 const { getRoom, addPlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
-const { getOrCreatePlayerRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
+const { getOrCreateRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
 const { createChannel } = require('../../services/discord/channels');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
@@ -71,7 +71,7 @@ module.exports = {
       }
 
       // Get or create Player role
-      const playerRole = await getOrCreatePlayerRole(guild);
+      const playerRole = await getOrCreateRole(guild, ROLES.PLAYER);
       
       // Get or create Alive role (with hoist enabled to group members)
       const aliveRole = await getOrCreateAliveRole(guild);
