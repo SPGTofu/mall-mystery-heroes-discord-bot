@@ -101,6 +101,10 @@ module.exports = {
     try {
       // TODO: finish once implemented
       await killPlayerForRoom(playerToBeDead.username, roomID);
+
+      // change status of user on Discord
+      await playerId.roles.remove('Alive');
+      await playerId.roles.add('Dead');
       await interaction.reply({
         embeds: [
           {
