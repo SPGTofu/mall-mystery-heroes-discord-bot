@@ -169,22 +169,6 @@ async function getPlayerByUserID(userID, roomID) {
 }
 
 /**
- * Fetches every player document for a room
- * @param {string} roomID - Room ID
- * @returns {Promise<Array<FirebaseFirestore.QueryDocumentSnapshot>>}
- */
-async function fetchAllPlayersForRoom(roomID) {
-  try {
-    const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.get();
-    return snapshot.docs;
-  } catch (error) {
-    console.error('Error fetching players:', error);
-    throw error;
-  }
-}
-
-/**
  * Fetches a player document based on Discord user ID
  * @param {string} userID - Discord user ID
  * @param {string} roomID - Room ID
@@ -885,7 +869,6 @@ async function generateAndAssignTargets(roomID) {
     
     // Generate targets using the service
     const { targetMap, playerData } = generateTargets(playerNames);
-    
     // Update database with targets and assassins
     for (const playerName of playerNames) {
       const playerAssassins = playerData[playerName]?.assassins || [];
@@ -1096,7 +1079,6 @@ module.exports = {
   createOrUpdateRoom,
   getRoom,
   endGame,
-  fetchAllPlayersForRoom,
   fetchAlivePlayersForRoom,
   fetchAllPlayersWithScores,
   addPlayerForRoom,
