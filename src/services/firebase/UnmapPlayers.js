@@ -4,7 +4,7 @@ import { updateDoc,
          query, 
          where 
     } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { db } from '../../../utils/firebase.js';
 const UnmapPlayers = () => {
     //unmaps the selected player's targets and assassins
     const handleUnmapping = async (selectedPlayerName, roomID) => {        
