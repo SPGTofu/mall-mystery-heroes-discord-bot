@@ -93,6 +93,28 @@ async function fetchAlivePlayersForRoom(roomID) {
 }
 
 /**
+ * Gets a player by user ID
+ * @param {string} userID - Discord user ID
+ * @param {string} roomID - Room ID
+ * @returns {Promise<FirebaseFirestore.DocumentSnapshot|null>} Player document snapshot or null if not found
+ */
+async function getPlayerByUserID(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).get();
+    
+    if (snapshot.empty) {
+      return null;
+    }
+    
+    return snapshot.docs[0];
+  } catch (error) {
+    console.error('Error getting player by user ID:', error);
+    throw error;
+  }
+}
+
+/**
  * Adds a player to the room
  * @param {string} playerName - Player name
  * @param {string} userID - Discord user ID (unique identifier)
@@ -340,6 +362,37 @@ async function checkOpenSeason(playerName, roomID) {
     return playerData.openSeason === true;
   } catch (error) {
     console.error(`Error checking open season for ${playerName}:`, error);
+  }
+}
+
+/**
+ * Removes a player from the room (deletes the player document)
+ * @param {string} userID - Discord user ID (unique identifier)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<void>}
+ */
+async function removePlayerForRoom(userID, roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.where('userID', '==', userID).get();
+
+    if (snapshot.empty) {
+      throw new Error(`Player with userID ${userID} not found`);
+    }
+
+    const playerDoc = snapshot.docs[0];
+    const playerData = playerDoc.data();
+    const playerName = playerData.name;
+
+    // Kill the player first (unmaps targets/assassins and updates the document)
+    await killPlayerForRoom(playerName, roomID);
+
+    // Delete the player document
+    await playerDoc.ref.delete();
+
+    console.log(`Player ${playerName} (userID: ${userID}) removed from room ${roomID}.`);
+  } catch (error) {
+    console.error('Error removing player:', error);
     throw error;
   }
 }
@@ -358,4 +411,6 @@ module.exports = {
   fetchPlayerForRoom,
   setOpenSeasonForPlayer,
   checkOpenSeason,
+  getPlayerByUserID,
+  removePlayerForRoom,
 };
