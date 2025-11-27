@@ -4,11 +4,12 @@
  */
 
 const { ApplicationCommandOptionType } = require("discord.js");
-const { handleReviveForPlayer } = require("../../services/firebase/dbCallsAdapter");
+const { handleReviveForPlayer, getRoom } = require("../../services/firebase/dbCallsAdapter");
 const { createAnnouncement, createErrorAnnouncement } = require("../../services/discord/messages");
 const { hasRole } = require("../../services/discord/permissions");
 const { ROLES } = require("../../config/roles");
 const { removeRole, assignRole } = require("../../services/discord/roles");
+const { GameError } = require("../../utils/errors");
 
 module.exports = {
   name: 'revive',
@@ -48,8 +49,8 @@ module.exports = {
     if (!hasRole(sender, ROLES.GAME_MASTER)) {
       const message = createErrorAnnouncement(`${sender} tried to revive ${playerToRevive}, but they are not a GM.`);
       await gmChannel.send({ embeds: [message]});
-      message = createErrorAnnouncement('You are not a game master.');
-      return interaction.reply({ embeds: [message] });
+      const userError = createErrorAnnouncement('You are not a game master.');
+      return interaction.reply({ embeds: [userError] });
     }
 
     // Cannot revive someone already alive
@@ -57,6 +58,22 @@ module.exports = {
       const message = createErrorAnnouncement(`${playerToRevive} is already alive.`);
       await gmChannel.send({ embeds: [message] });
       const replyMessage = createErrorAnnouncement(`${playerToRevive} is already alive.`);
+      return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
+    }
+
+    // Cannot revive someone not dead
+    if (!hasRole(member, ROLES.DEAD)) {
+      const message = createErrorAnnouncement(`${playerToRevive} is not dead.`);
+      await gmChannel.send({ embeds: [message] });
+      const replyMessage = createErrorAnnouncement(`${playerToRevive} is not dead.`);
+      return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
+    }
+
+    // Cannot revive someone not a player
+    if (!hasRole(member, ROLES.PLAYER)) {
+      const message = createErrorAnnouncement(`${playerToRevive} is not a player.`);
+      await gmChannel.send({ embeds: [message] });
+      const replyMessage = createErrorAnnouncement(`${playerToRevive} is not a player.`);
       return interaction.reply({ embeds: [replyMessage], flags: ['Ephemeral'] });
     }
 
@@ -87,4 +104,3 @@ module.exports = {
     }
   },
 };
-

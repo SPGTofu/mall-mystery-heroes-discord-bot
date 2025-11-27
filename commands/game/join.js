@@ -7,8 +7,8 @@ const { PermissionError, GameError, handleError } = require('../../utils/errors'
 const { isGameMaster, isAdmin } = require('../../services/discord/permissions');
 const { getRoom, addPlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
 const { getOrCreateRole, getOrCreateAliveRole, assignRole } = require('../../services/discord/roles');
-const { createChannel } = require('../../services/discord/channels');
-const { createEmbed } = require('../../services/discord/messages');
+const { createChannel, getChannel } = require('../../services/discord/channels');
+const { createEmbed, createAnnouncement } = require('../../services/discord/messages');
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const CHANNELS = require('../../config/channels');
 const { ROLES } = require('../../config/roles');
@@ -19,7 +19,7 @@ module.exports = {
   options: [
     {
       name: 'name',
-      description: 'Your real name',
+      description: 'Your first and last name',
       type: 3, // STRING
       required: true,
     },
@@ -147,6 +147,9 @@ module.exports = {
 
       await interaction.editReply(`✅ Successfully joined the game as **${playerName}**! Check your DM channel in the DMs category.`);
 
+      const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
+      const gmEmbed = createAnnouncement('Player Joined', `<@${member.id}> has joined the game.`);
+      await gmChannel.send({ embeds: [gmEmbed]});
     } catch (error) {
       console.error('Error in /game join:', error);
       await handleError(error, interaction);
