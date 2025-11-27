@@ -77,6 +77,26 @@ async function endGame(roomID) {
 }
 
 /**
+ * Fetches all players for a room (regardless of alive status)
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Array<Object>>} Array of player documents with data
+ */
+async function fetchAllPlayersForRoom(roomID) {
+  try {
+    const playersRef = db.collection('rooms').doc(roomID).collection('players');
+    const snapshot = await playersRef.get();
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ref: doc.ref,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching all players:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetches all alive players for a room
  * @param {string} roomID - Room ID
  * @returns {Promise<Array<string>>} Array of player names
@@ -488,11 +508,47 @@ async function removePlayerForRoom(userID, roomID) {
   }
 }
 
+/**
+ * Generates and assigns targets to all players in a room
+ * Uses the target assignment service to generate targets, then updates the database
+ * @param {string} roomID - Room ID
+ * @returns {Promise<Map>} Map of playerName -> array of target names
+ */
+async function generateAndAssignTargets(roomID) {
+  try {
+    const { generateTargets } = require('../game/targetAssignment');
+    
+    // Fetch all players
+    const players = await fetchAllPlayersForRoom(roomID);
+    const playerNames = players.map(p => p.name);
+    
+    if (playerNames.length === 0) {
+      throw new Error('No players found in room');
+    }
+    
+    // Generate targets using the service
+    const { targetMap, playerData } = generateTargets(playerNames);
+    
+    // Update database with targets and assassins
+    for (const playerName of playerNames) {
+      const playerAssassins = playerData[playerName]?.assassins || [];
+      await updateTargetsForPlayer(playerName, targetMap.get(playerName) || [], roomID);
+      await updateAssassinsForPlayer(playerName, playerAssassins, roomID);
+    }
+    
+    return targetMap;
+  } catch (error) {
+    console.error('Error generating and assigning targets:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
   getRoom,
   endGame,
+  fetchAllPlayersForRoom,
   fetchAlivePlayersForRoom,
   addPlayerForRoom,
   updatePointsForPlayer,
@@ -507,4 +563,5 @@ module.exports = {
   checkOpenSeason,
   getPlayerByUserID,
   removePlayerForRoom,
+  generateAndAssignTargets,
 };
