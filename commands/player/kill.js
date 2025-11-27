@@ -4,9 +4,10 @@
  */
 
 const { isGameMaster, hasRole } = require('../../services/discord/permissions');
-const { createEmbed } = require('../../services/discord/messages');
-const ROLES = require('../../config/roles');
+const { createEmbed, createAnnouncement, createErrorAnnouncement } = require('../../services/discord/messages');
+const { ROLES } = require('../../config/roles');
 const CHANNELS = require('../../config/channels');
+const { getChannel } = require('../../services/discord/channels');
 const { ApplicationCommandOptionType } = require("discord.js");
 const { fetchTargetsForPlayer,
     fetchPointsForPlayerInRoom,
@@ -56,11 +57,12 @@ module.exports = {
       }
 
       const roomID = interaction.guildId;
+      const guild = interaction.guild;
+      const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
 
       // 3. Get the Discord guild members
-      const guildMembers = await interaction.guild.members.fetch();
-      const assassinMember = guildMembers.find(member => member.displayName === assassinName || member.user.username === assassinName);
-      const targetMember = guildMembers.find(member => member.displayName === targetName || member.user.username === targetName);
+      const assassinMember = await interaction.options.getMember('assassin');
+      const targetMember = interaction.options.getMember('assassin');
 
       if (!assassinMember) {
         return interaction.reply({
@@ -93,13 +95,10 @@ module.exports = {
 
       // 5. Validate kill (Check if kill makes sense with Firebase)
       // Check if assassin has target in their targets list
-      console.log("wass");
       const assassinTargets = await fetchTargetsForPlayer(assassinName, roomID);
       if (!assassinTargets.includes(targetName)) {
-        return interaction.reply({
-          content: `${assassinName} does not have ${targetName} as a target. Kill not valid.`,
-          ephemeral: true
-        });
+        const message = createErrorAnnouncement(`<@${assassin.id}> does not have <@${target.id}> as a target. Kill not valid.`);
+        await gmChannel.send({ embeds: [message] })
       }
 
       // 6. Get current points
