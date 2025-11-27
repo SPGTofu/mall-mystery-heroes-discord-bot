@@ -12,7 +12,7 @@ const {
   createOrUpdateRoom,
   validatePlayersNotInOtherActiveGames
 } = require('../../services/firebase/dbCallsAdapter');
-const { findChannelByName } = require('../../services/discord/channels');
+const { getChannel } = require('../../services/discord/channels');
 const { createEmbed, createAnnouncement } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
@@ -119,7 +119,7 @@ module.exports = {
       });
 
       // Broadcast game start to general channel
-      const generalChannel = findChannelByName(guild, CHANNELS.GENERAL);
+      const generalChannel = getChannel(guild, CHANNELS.GENERAL);
       if (generalChannel) {
         const announcement = createAnnouncement(
           '🎮 GAME STARTED!',
