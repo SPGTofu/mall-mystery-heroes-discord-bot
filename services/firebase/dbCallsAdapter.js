@@ -66,6 +66,9 @@ async function deleteRoomAndData(roomID) {
     const playersRef = roomRef.collection('players');
     await deleteCollection(playersRef);
 
+    const tasksRef = roomRef.collection('tasks');
+    await deleteCollection(tasksRef);
+
     await roomRef.delete();
     console.log(`Room ${roomID} and its data deleted successfully.`);
   } catch (error) {

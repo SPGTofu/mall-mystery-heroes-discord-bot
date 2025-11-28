@@ -6,6 +6,7 @@
 const { EmbedBuilder, ApplicationCommandOptionType } = require('discord.js');
 const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, updateTask } = require('../../services/firebase/taskService');
+const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
 
@@ -27,6 +28,16 @@ module.exports = {
       const guildMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
       if (!canPerformGMActions(guildMember)) {
         return await interaction.reply({ content: '❌ You do not have permission to end tasks. GM role required.', ephemeral: true });
+      }
+
+      const roomSnapshot = await getRoom(interaction.guildId);
+      if (!roomSnapshot.exists) {
+        return await interaction.reply({ content: '❌ No game room exists. Create and start a game before ending tasks.', ephemeral: true });
+      }
+
+      const roomData = roomSnapshot.data();
+      if (!roomData.isGameActive) {
+        return await interaction.reply({ content: '⚠️ Tasks can only be ended while a game is running. Start the game with /game start first.', ephemeral: true });
       }
 
       const taskNameInput = interaction.options.getString('task_name', true).trim();
