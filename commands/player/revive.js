@@ -5,12 +5,14 @@
 
 const { ApplicationCommandOptionType } = require("discord.js");
 const { handleReviveForPlayer, getRoom } = require("../../services/firebase/dbCallsAdapter");
-const { createAnnouncement, createErrorAnnouncement } = require("../../services/discord/messages");
+const { createAnnouncement, createErrorAnnouncement, createEmbed } = require("../../services/discord/messages");
 const { hasRole } = require("../../services/discord/permissions");
 const { ROLES } = require("../../config/roles");
 const { removeRole, assignRole } = require("../../services/discord/roles");
 const { GameError } = require("../../utils/errors");
 const { remapAndNotifyTargets } = require("../../services/game/playerTargetUpdates");
+const { getChannel } = require("../../services/discord/channels");
+const CHANNELS = require("../../config/channels");
 
 module.exports = {
   name: 'revive',
@@ -100,10 +102,25 @@ module.exports = {
         playersNeedingTargets: [playerToRevive.id],
         playersNeedingAssassins: [playerToRevive.id],
       });
- 
-      const message = createAnnouncement('Player Revived', `${playerToRevive} has been revived with ${points} points!`);
-      await gmChannel.send({ embeds: [message] })
-      return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
+
+      const broadcastEmbed = createEmbed({
+        title: '✨ Player Revived',
+        description: `${playerToRevive} has been revived with ${points} points and is back in the game. Stay sharp!`,
+        color: 0x32cd32,
+        timestamp: true,
+      });
+
+      const generalChannel = getChannel(interaction.guild, CHANNELS.GENERAL);
+      if (generalChannel) {
+        await generalChannel.send({ embeds: [broadcastEmbed] });
+      }
+
+      if (gmChannel) {
+        await gmChannel.send({ embeds: [broadcastEmbed] });
+      }
+
+      const replyEmbed = createAnnouncement('Player Revived', `${playerToRevive} has been revived with ${points} points!`);
+      return interaction.reply({ embeds: [replyEmbed], flags: ['Ephemeral'] });
 
     } catch (e) {
       const message = createErrorAnnouncement(`An error occurred reviving ${playerToRevive}: ${e}`);

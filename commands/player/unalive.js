@@ -7,7 +7,7 @@ const { ApplicationCommandOptionType } = require("discord.js");
 const { killPlayerForRoom, getRoom, fetchPlayerByUserIdForRoom } = require("../../services/firebase/dbCallsAdapter");
 const { hasRole } = require("../../services/discord/permissions");
 const { ROLES } = require("../../config/roles");
-const { createErrorAnnouncement, createAnnouncement } = require("../../services/discord/messages");
+const { createErrorAnnouncement, createAnnouncement, createEmbed } = require("../../services/discord/messages");
 const { removeRole, assignRole } = require("../../services/discord/roles");
 const { GameError } = require("../../utils/errors");
 const {
@@ -16,6 +16,8 @@ const {
   remapAndNotifyTargets,
   dedupeIds,
 } = require("../../services/game/playerTargetUpdates");
+const { getChannel } = require("../../services/discord/channels");
+const CHANNELS = require("../../config/channels");
 
 module.exports = {
   name: 'unalive',
@@ -84,6 +86,22 @@ module.exports = {
       const message = createAnnouncement('Player Update', `${playerToBeDead} has been killed`);
 
       await interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
+
+      const eliminationEmbed = createEmbed({
+        title: '⚔️ Player Eliminated',
+        description: `${playerToBeDead} has been eliminated from the game. Targets have been reassigned.`,
+        color: 0xff4500,
+        timestamp: true,
+      });
+
+      const generalChannel = getChannel(interaction.guild, CHANNELS.GENERAL);
+      if (generalChannel) {
+        await generalChannel.send({ embeds: [eliminationEmbed] });
+      }
+
+      if (gmChannel) {
+        await gmChannel.send({ embeds: [eliminationEmbed] });
+      }
 
       const dmsCategory = getDmsCategory(interaction.guild);
       await notifyPlayerEliminated(dmsCategory, playerToBeDead.id, targetDbName);

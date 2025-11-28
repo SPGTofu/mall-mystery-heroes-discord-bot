@@ -62,13 +62,19 @@ module.exports = {
       await setOpenSeasonForPlayer(userID, true, roomID);
 
       // Broadcast message to general channel
+      const announcement = createAnnouncement(
+        '🔴 OPEN SEASON DECLARED',
+        `**${dbPlayerName}** is now in **OPEN SEASON**!\n\nAll players can now target and kill ${dbPlayerName}.`
+      );
+
       const generalChannel = getChannel(guild, CHANNELS.GENERAL);
       if (generalChannel) {
-        const announcement = createAnnouncement(
-          '🔴 OPEN SEASON DECLARED',
-          `**${dbPlayerName}** is now in **OPEN SEASON**!\n\nAll players can now target and kill ${dbPlayerName}.`
-        );
         await generalChannel.send({ embeds: [announcement] });
+      }
+
+      const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
+      if (gmChannel) {
+        await gmChannel.send({ embeds: [announcement] });
       }
 
       // Reply to interaction
@@ -82,4 +88,3 @@ module.exports = {
     }
   },
 };
-
