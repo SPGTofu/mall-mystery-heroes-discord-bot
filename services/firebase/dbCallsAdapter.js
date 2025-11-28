@@ -517,8 +517,9 @@ async function killPlayerForRoom(playerIdentifier, roomID) {
  * - Clears targets/assassins
  * - Calls backend remap
  */
-async function handleReviveForPlayer(playerIdentifier, roomID, points = 0) {
+async function handleReviveForPlayer(playerIdentifier, roomID, points = 0, options = {}) {
   try {
+    const { skipRemap = false } = options || {};
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
 
     // Fetch player by userID
@@ -546,16 +547,13 @@ async function handleReviveForPlayer(playerIdentifier, roomID, points = 0) {
 
     console.log(`Player ${playerName} revived in room ${roomID}.`);
 
-    // Fetch alive players for remap
-    const aliveSnap = await playersRef.where('isAlive', '==', true).get();
-    const alivePlayers = aliveSnap.docs.map(doc => doc.data().userID);
+    if (!skipRemap && typeof remapPlayersBackend === "function") {
+      const aliveSnap = await playersRef.where('isAlive', '==', true).get();
+      const alivePlayers = aliveSnap.docs.map(doc => doc.data().userID);
 
-    // For now: revived player needs both targets & assassins
-    const playersNeedingTargets = [playerIdentifier];
-    const playersNeedingAssassins = [playerIdentifier];
+      const playersNeedingTargets = [playerIdentifier];
+      const playersNeedingAssassins = [playerIdentifier];
 
-    // Backend remap
-    if (typeof remapPlayersBackend === "function") {
       await remapPlayersBackend(
         playersNeedingTargets,
         playersNeedingAssassins,

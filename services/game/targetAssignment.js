@@ -38,14 +38,14 @@ function calculateMaxTargets(playerCount) {
 /**
  * Generates target assignments for all players
  * Based on TargetGenerator.js from the frontend
- * @param {Array<string>} playerNames - Array of player names
+ * @param {Array<string>} playerIds - Array of player IDs
  * @returns {Object} Object containing targetMap and playerData
- *   - targetMap: Map of playerName -> array of target names
+ *   - targetMap: Map of playerId -> array of target IDs
  *   - playerData: Object with player tracking data (assassins, etc.)
  */
-function generateTargets(playerNames) {
-  const playerList = randomizeArray([...playerNames]);
-  const MAX_TARGETS = calculateMaxTargets(playerNames.length);
+function generateTargets(playerIds) {
+  const playerList = randomizeArray([...playerIds]);
+  const MAX_TARGETS = calculateMaxTargets(playerIds.length);
   
   // Initialize player data tracking (matching TargetGenerator.js structure)
   const newTargetMap = new Map();
@@ -53,28 +53,28 @@ function generateTargets(playerNames) {
   
   // Initialize player data structure
   // lastTargetIndex is set to the player's index in the randomized list
-  for (let i = 0; i < playerNames.length; i++) {
-    const playerName = playerNames[i];
+  for (let i = 0; i < playerIds.length; i++) {
+    const playerId = playerIds[i];
     const data = {
       numOfAssassins: 0,
-      lastTargetIndex: playerList.indexOf(playerName),
+      lastTargetIndex: playerList.indexOf(playerId),
       prevTargets: [],
       assassins: []
     };
-    newPlayerData[playerName] = data;
+    newPlayerData[playerId] = data;
   }
   
   // Loop through every player to assign targets (matching TargetGenerator.js)
-  for (let playerDex = 0; playerDex < playerNames.length; playerDex++) {
+  for (let playerDex = 0; playerDex < playerIds.length; playerDex++) {
     const currPlayer = playerList[playerDex];
     newTargetMap.set(currPlayer, []);
     
     // Assign MAX_TARGETS targets to each player
     for (let targetCount = 0; targetCount < MAX_TARGETS; targetCount++) {
-      let targetIndex = (newPlayerData[currPlayer].lastTargetIndex + 1) % playerNames.length;
+      let targetIndex = (newPlayerData[currPlayer].lastTargetIndex + 1) % playerIds.length;
       let target = playerList[targetIndex];
-      const originalDex = targetIndex;
-      
+      const originalDex = targetIndex;      
+
       // Skip player if they already have MAX_TARGETS assassins,
       // if they are targeting themselves, or if there's a circular dependency
       // (matching TargetGenerator.js condition exactly)
@@ -83,7 +83,7 @@ function generateTargets(playerNames) {
         target === currPlayer ||
         newPlayerData[currPlayer].assassins.includes(target)
       ) {
-        targetIndex = (targetIndex + 1) % playerNames.length;
+        targetIndex = (targetIndex + 1) % playerIds.length;
         target = playerList[targetIndex];
         
         // Stop if we've looped through the entire array
@@ -121,5 +121,3 @@ module.exports = {
   calculateMaxTargets,
   generateTargets,
 };
-
-

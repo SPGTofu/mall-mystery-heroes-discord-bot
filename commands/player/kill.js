@@ -16,6 +16,38 @@ const { fetchTargetsForPlayer,
     updateLogsForRoom,
     fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
 const { canPerformGMActions } = require('../../utils/permissions');
+const {
+  getDmsCategory,
+  notifyPlayerEliminated,
+  remapAndNotifyTargets,
+  dedupeIds,
+} = require('../../services/game/playerTargetUpdates');
+
+function hasTargetAssignment(targetList, targetId, targetName) {
+  if (!Array.isArray(targetList)) {
+    return false;
+  }
+
+  const normalizedId = targetId ? String(targetId).trim() : null;
+  const normalizedName = targetName ? targetName.trim().toLowerCase() : null;
+
+  return targetList.some(entry => {
+    if (entry === undefined || entry === null) {
+      return false;
+    }
+
+    const entryString = String(entry).trim();
+    if (normalizedId && entryString === normalizedId) {
+      return true;
+    }
+
+    if (normalizedName && entryString.toLowerCase() === normalizedName) {
+      return true;
+    }
+
+    return false;
+  });
+}
 
 module.exports = {
   name: 'kill',
@@ -141,8 +173,7 @@ module.exports = {
         });
       }
       
-      // Compare against database name, not Discord username
-      if (!assassinTargets.includes(target.id)) {
+      if (!hasTargetAssignment(assassinTargets, target.id, targetDbName)) {
         const message = createErrorAnnouncement(`<@${assassin.id}> does not have <@${target.id}> as a target. Kill not valid.`);
         await gmChannel.send({ embeds: [message] });
         return interaction.reply({
@@ -208,6 +239,18 @@ module.exports = {
         await generalChannel.send({ embeds: [killEmbed] });
       }
 
+      const dmsCategory = getDmsCategory(guild);
+      await notifyPlayerEliminated(dmsCategory, target.id, targetDbName);
+      const playersNeedingTargets = dedupeIds(targetPlayerData.assassins || []);
+      const playersNeedingAssassins = dedupeIds(targetPlayerData.targets || []);
+      await remapAndNotifyTargets({
+        guild,
+        roomID,
+        playersNeedingTargets,
+        playersNeedingAssassins,
+        dmsCategoryOverride: dmsCategory,
+      });
+
       // Reply to the interaction
       await interaction.reply({
         content: `✅ Kill recorded! ${assassinDbName} assassinated ${targetDbName}.`,
@@ -223,4 +266,3 @@ module.exports = {
     }
   },
 };
-
