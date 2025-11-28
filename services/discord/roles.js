@@ -387,6 +387,7 @@ module.exports = {
   getOrCreateAliveRole,
   getOrCreateDeadRole,
   getOrCreateOpenSeasonRole,
-  getOrCreateAllRolesForRoom
+  getOrCreateAllRolesForRoom,
+  deleteAllRolesForRoom
 };
 
