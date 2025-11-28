@@ -350,12 +350,15 @@ async function getOrCreateAllRolesForRoom(guild) {
 }
 
 /**
- * Deletes all roles needed for a game except game master
- * @returns {Promise<String>} DO NOT USE!!! IT DOESN"T WORK
- * @throws {Error}
+ * Deletes all game-specific roles created by the bot
+ * @param {Guild} guild
+ * @returns {Promise<void>}
  */
 async function deleteAllRolesForRoom(guild) {
+  assertGuild(guild);
+
   const roleNames = [
+    ROLES.GAME_MASTER,
     ROLES.PLAYER,
     ROLES.ALIVE,
     ROLES.DEAD,
@@ -365,7 +368,11 @@ async function deleteAllRolesForRoom(guild) {
   for (const roleName of roleNames) {
     const role = guild.roles.cache.find(r => r.name === roleName);
     if (role) {
-      await deleteRole(role);
+      try {
+        await deleteRole(role);
+      } catch (error) {
+        console.warn(`Unable to delete role "${roleName}":`, error.message);
+      }
     }
   }
 }

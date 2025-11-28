@@ -4,7 +4,7 @@
  */
 
 const { canPerformGMActions } = require('../../utils/permissions');
-const { PermissionError, handleError } = require('../../utils/errors');
+const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
 const { getOrCreateRole, deleteRole, createRole, getOrCreatePlayerRole, getOrCreateGameMasterRole, getOrCreateAliveRole, getOrCreateDeadRole, getOrCreateAllRolesForRoom, deleteAllRolesForRoom } = require('../../services/discord/roles');
@@ -32,12 +32,11 @@ module.exports = {
       const roomSnapshot = await getRoom(roomID);
       
       if (roomSnapshot.exists) {
-        // Room exists, clear existing data
-        await interaction.editReply('Room already exists. Cleaning up and resetting...');
-      } else {
-        // Create new room
-        await interaction.editReply('Creating new game room...');
+        throw new GameError('Command cannot be executed. Another game is still in progress. End that game to create a new one.');
       }
+
+      // Create new room
+      await interaction.editReply('Creating new game room...');
 
       // Create or update room with initial data
       await createOrUpdateRoom(roomID, {
