@@ -62,13 +62,19 @@ module.exports = {
       await setOpenSeasonForPlayer(userID, false, roomID);
 
       // Broadcast message to general channel
+      const announcement = createAnnouncement(
+        '🟢 OPEN SEASON ENDED',
+        `**${dbPlayerName}** is no longer in **OPEN SEASON**.\n\nPlayers can no longer freely target ${dbPlayerName}.`
+      );
+
       const generalChannel = getChannel(guild, CHANNELS.GENERAL);
       if (generalChannel) {
-        const announcement = createAnnouncement(
-          '🟢 OPEN SEASON ENDED',
-          `**${dbPlayerName}** is no longer in **OPEN SEASON**.\n\nPlayers can no longer freely target ${dbPlayerName}.`
-        );
         await generalChannel.send({ embeds: [announcement] });
+      }
+
+      const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
+      if (gmChannel) {
+        await gmChannel.send({ embeds: [announcement] });
       }
 
       // Reply to interaction
@@ -82,4 +88,3 @@ module.exports = {
     }
   },
 };
-

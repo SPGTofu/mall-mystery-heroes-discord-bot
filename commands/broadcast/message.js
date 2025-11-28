@@ -16,7 +16,7 @@ module.exports = {
   // Command option: text message that will be broadcast to all players
   options: [
     {
-      name: 'broadcast',
+      name: 'message',
       type: 3,
       description: 'Message to broadcast to all players',
       required: true
@@ -82,8 +82,12 @@ module.exports = {
 
     // Report that the broadcast was sent to general channel
     const message = createBroadcastAnnouncement('Broadcast Sent', `I have sent this messsage to #general:\n ${messageContent}`)
-    return gmChannel.send({
+    gmChannel.send({
       embeds: [message]
+    })
+    return interaction.reply({
+      content: 'Broadcasted',
+      ephemeral: true
     })
   },
 };
