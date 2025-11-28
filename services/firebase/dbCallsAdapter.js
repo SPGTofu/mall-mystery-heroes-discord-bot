@@ -321,19 +321,22 @@ async function setIsAliveForPlayer(playerIdentifier, isAlive, roomID) {
 
 /**
  * Updates targets for a player
- * @param {string} playerName - Player name
+ * @param {string} playerIdentifier - userId or Player Name
  * @param {Array<string>} targets - Array of target names
  * @param {string} roomID - Room ID
  * @returns {Promise<void>}
  */
-async function updateTargetsForPlayer(playerName, targets, roomID) {
+async function updateTargetsForPlayer(playerIdentifier, targets, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.where('name', '==', playerName).get();
-    
+
+    // Try userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
     if (snapshot.empty) {
-      throw new Error(`Player ${playerName} not found`);
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
     }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
     
     const playerDoc = snapshot.docs[0];
     await playerDoc.ref.update({
@@ -348,19 +351,22 @@ async function updateTargetsForPlayer(playerName, targets, roomID) {
 
 /**
  * Updates assassins for a player
- * @param {string} playerName - Player name
- * @param {Array<string>} assassins - Array of assassin names
+ * @param {string} playerIdentifier - UserID or player name
+ * @param {Array<string>} assassins - Array of assassin ids
  * @param {string} roomID - Room ID
  * @returns {Promise<void>}
  */
-async function updateAssassinsForPlayer(playerName, assassins, roomID) {
+async function updateAssassinsForPlayer(playerIdentifier, assassins, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.where('name', '==', playerName).get();
-    
+
+    // Try userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
     if (snapshot.empty) {
-      throw new Error(`Player ${playerName} not found`);
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
     }
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);
     
     const playerDoc = snapshot.docs[0];
     await playerDoc.ref.update({
@@ -375,18 +381,19 @@ async function updateAssassinsForPlayer(playerName, assassins, roomID) {
 
 /**
  * Unmaps a player's targets and assassins (Admin SDK version)
- * @param {string} selectedPlayerName
+ * @param {string} playerIdentifier
  * @param {string} roomID
  */
-async function unmapPlayers(selectedPlayerName, roomID) {
+async function unmapPlayers(playerIdentifier, roomID) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
 
-  // Get selected player
-  const playerSnapshot = await playersRef.where('name', '==', selectedPlayerName).get();
-  if (playerSnapshot.empty) {
-    console.error("Error unmapping: player not found:", selectedPlayerName);
-    return;
+  // Try userID first
+  let playerSnapshot = await playersRef.where('userID', '==', playerIdentifier).get();
+  if (snapshot.empty) {
+    playerSnapshot = await playersRef.where('name', '==', playerIdentifier).get();
   }
+
+  if (playerSnapshot.empty) throw new Error(`Player not found while unmapping: ${playerIdentifier}`);
 
   const playerDoc = playerSnapshot.docs[0].ref;
   const playerData = playerSnapshot.docs[0].data();
@@ -394,28 +401,28 @@ async function unmapPlayers(selectedPlayerName, roomID) {
   const playerTargets = playerData.targets || [];
 
   // Remove selected player from assassins' targets
-  for (const assassinName of playerAssassins) {
-    const assassinSnap = await playersRef.where('name', '==', assassinName).get();
+  for (const assassinId of playerAssassins) {
+    const assassinSnap = await playersRef.where('userID', '==', assassinId).get();
     if (assassinSnap.empty) {
-      console.error("Error unmapping assassin not found:", assassinName);
+      console.error("Error unmapping assassin not found:", assassinId);
       continue;
     }
     const assassinDoc = assassinSnap.docs[0].ref;
     const assassinData = assassinSnap.docs[0].data();
-    const newTargets = (assassinData.targets || []).filter(t => t !== selectedPlayerName);
+    const newTargets = (assassinData.targets || []).filter(t => t !== playerIdentifier);
     await assassinDoc.update({ targets: newTargets });
   }
 
   // Remove selected player from targets' assassins
-  for (const targetName of playerTargets) {
-    const targetSnap = await playersRef.where('name', '==', targetName).get();
+  for (const targetId of playerTargets) {
+    const targetSnap = await playersRef.where('userID', '==', targetId).get();
     if (targetSnap.empty) {
-      console.error("Error unmapping target not found:", targetName);
+      console.error("Error unmapping target not found:", targetId);
       continue;
     }
     const targetDoc = targetSnap.docs[0].ref;
     const targetData = targetSnap.docs[0].data();
-    const newAssassins = (targetData.assassins || []).filter(a => a !== selectedPlayerName);
+    const newAssassins = (targetData.assassins || []).filter(a => a !== playerIdentifier);
     await targetDoc.update({ assassins: newAssassins });
   }
 
@@ -446,7 +453,7 @@ async function killPlayerForRoom(playerIdentifier, roomID) {
     const playerName = playerData.name;
 
     // Unmap targets and assassins first
-    await unmapPlayers(playerName, roomID);
+    await unmapPlayers(playerIdentifier, roomID);
 
     const playerDoc = snap.docs[0].ref;
 
@@ -467,7 +474,6 @@ async function killPlayerForRoom(playerIdentifier, roomID) {
   }
 }
 
-
 /**
  * Revives a player in a room (Admin SDK)
  * - Marks player alive
@@ -475,15 +481,18 @@ async function killPlayerForRoom(playerIdentifier, roomID) {
  * - Clears targets/assassins
  * - Calls backend remap
  */
-async function handleReviveForPlayer(playerId, roomID, points = 0) {
+async function handleReviveForPlayer(playerIdentifier, roomID, points = 0) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
 
     // Fetch player by userID
-    const snap = await playersRef.where('userID', '==', playerId).get();
+    // Try userID first
+    let snap = await playersRef.where('userID', '==', playerIdentifier).get();
     if (snap.empty) {
-      throw new Error(`Player with userID ${playerId} not found`);
+      snap = await playersRef.where('name', '==', playerIdentifier).get();
     }
+
+    if (snap.empty) throw new Error(`Player not found: ${playerIdentifier}`);
 
     const playerDoc = snap.docs[0].ref;
     const playerData = snap.docs[0].data();
@@ -503,11 +512,11 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
 
     // Fetch alive players for remap
     const aliveSnap = await playersRef.where('isAlive', '==', true).get();
-    const alivePlayers = aliveSnap.docs.map(doc => doc.data().name);
+    const alivePlayers = aliveSnap.docs.map(doc => doc.data().userId);
 
     // For now: revived player needs both targets & assassins
-    const playersNeedingTargets = [playerName];
-    const playersNeedingAssassins = [playerName];
+    const playersNeedingTargets = [playerIdentifier];
+    const playersNeedingAssassins = [playerIdentifier];
 
     // Backend remap
     if (typeof remapPlayersBackend === "function") {
@@ -520,7 +529,6 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
     }
 
     return true;
-
   } catch (error) {
     console.error("Error reviving player:", error);
   }
@@ -529,19 +537,21 @@ async function handleReviveForPlayer(playerId, roomID, points = 0) {
 /**
  * Fetches a player from the room by user ID
  * Admin SDK version of fetchPlayerForRoom
- * @param {string} userID - Discord user ID (unique identifier)
+ * @param {string} playerIdentifier - Discord user ID (unique identifier)
  * @param {string} roomID - Room ID
  * @returns {Promise<FirebaseFirestore.DocumentSnapshot>} Player document
  */
-async function fetchPlayerForRoom(userID, roomID) {
+async function fetchPlayerForRoom(playerIdentifier, roomID) {
   try {
     const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.where('userID', '==', userID).get();
-    
+
+    // Try userID first
+    let snapshot = await playersRef.where('userID', '==', playerIdentifier).get();
     if (snapshot.empty) {
-      throw new Error(`Player with userID "${userID}" not found in the game.`);
+      snapshot = await playersRef.where('name', '==', playerIdentifier).get();
     }
-    
+
+    if (snapshot.empty) throw new Error(`Player not found: ${playerIdentifier}`);    
     return snapshot.docs[0];
   } catch (error) {
     console.error(`Error fetching player with userID ${userID}:`, error);
@@ -558,9 +568,15 @@ async function fetchPlayerForRoom(userID, roomID) {
  */
 
 /** Fetch one player's full document + data */
-async function getPlayerData(playerName, roomID) {
+async function getPlayerData(playerIdentifier, roomID) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
-  const snap = await playersRef.where('name', '==', playerName).get();
+
+  // Try userID first
+  let snap = await playersRef.where('userID', '==', playerIdentifier).get();
+  if (snap.empty) {
+    snap = await playersRef.where('name', '==', playerIdentifier).get();
+  }
+
   if (snap.empty) return null;
   return { ref: snap.docs[0].ref, data: snap.docs[0].data() };
 }
@@ -569,25 +585,25 @@ async function getPlayerData(playerName, roomID) {
 async function getAlivePlayers(roomID) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
   const snap = await playersRef.where('isAlive', '==', true).get();
-  return snap.docs.map(doc => doc.data().name);
+  return snap.docs.map(doc => doc.data().userId);
 }
 
 /** Fetch alive players ordered by assassin count ASC */
-async function getAlivePlayersOrderedByAssassinCount(roomID, excludeName = null) {
+async function getAlivePlayersOrderedByAssassinCount(roomID, excludePlayerId = null) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
   const snap = await playersRef.where('isAlive', '==', true).orderBy('assassinsLength', 'asc').get();
   return snap.docs
     .map(doc => doc.data())
-    .filter(p => p.name !== excludeName);
+    .filter(p => p.userId !== excludePlayerId);
 }
 
 /** Fetch alive players ordered by target count ASC */
-async function getAlivePlayersOrderedByTargetCount(roomID, excludeName = null) {
+async function getAlivePlayersOrderedByTargetCount(roomID, excludePlayerId = null) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
   const snap = await playersRef.where('isAlive', '==', true).orderBy('targetsLength', 'asc').get();
   return snap.docs
     .map(doc => doc.data())
-    .filter(p => p.name !== excludeName);
+    .filter(p => p.userId !== excludePlayerId);
 }
 
 /** Randomize any array */
@@ -609,10 +625,10 @@ function randomizeArrayBackend(array) {
 async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlayers, MAXTARGETS, roomID) {
   const tempNewTargets = {};
 
-  for (const player of playersNeedingTargets) {
-    const playerInfo = await getPlayerData(player, roomID);
+  for (const playerId of playersNeedingTargets) {
+    const playerInfo = await getPlayerData(playerId, roomID);
     if (!playerInfo) {
-      console.error(`Target regen error: player ${player} not found`);
+      console.error(`Target regen error: player ${playerId} not found`);
       continue;
     }
 
@@ -623,7 +639,7 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
 
     // Primary target search
     for (const possible of randomizedAlive) {
-      if (possible === player) continue;
+      if (possible === playerId) continue;
 
       const possibleInfo = await getPlayerData(possible, roomID);
       if (!possibleInfo) continue;
@@ -631,7 +647,7 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
 
       if (
         possibleData.assassinsLength >= MAXTARGETS ||
-        possibleData.targets.includes(player) ||
+        possibleData.targets.includes(playerId) ||
         newTargetArray.includes(possible) ||
         newTargetArray.length >= MAXTARGETS
       ) {
@@ -647,23 +663,23 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
 
     // Fallback - least assassins
     if (newTargetArray.length < MAXTARGETS) {
-      const fallbackList = await getAlivePlayersOrderedByAssassinCount(roomID, player);
+      const fallbackList = await getAlivePlayersOrderedByAssassinCount(roomID, playerId);
 
       for (const f of fallbackList) {
         if (newTargetArray.length >= MAXTARGETS) break;
 
-        if (f.name === player) continue;
-        if (newTargetArray.includes(f.name)) continue;
+        if (f.userId === playerId) continue;
+        if (newTargetArray.includes(f.userId)) continue;
 
-        newTargetArray.push(f.name);
-        const fAssassinsUpdated = [...f.assassins, player];
-        await updateAssassinsForPlayer(f.name, fAssassinsUpdated, roomID);
+        newTargetArray.push(f.userId);
+        const fAssassinsUpdated = [...f.assassins, playerId];
+        await updateAssassinsForPlayer(f.userId, fAssassinsUpdated, roomID);
       }
     }
 
     // Final write
-    tempNewTargets[player] = newTargetArray.filter(t => !(playerData.targets || []).includes(t));
-    await updateTargetsForPlayer(player, newTargetArray, roomID);
+    tempNewTargets[playerId] = newTargetArray.filter(t => !(playerData.targets || []).includes(t));
+    await updateTargetsForPlayer(playerId, newTargetArray, roomID);
   }
 
   return tempNewTargets;
@@ -679,10 +695,10 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
 async function handleAssassinRegenerationBackend(playersNeedingAssassins, alivePlayers, MAXTARGETS, roomID) {
   const tempNewAssassins = {};
 
-  for (const player of playersNeedingAssassins) {
-    const playerInfo = await getPlayerData(player, roomID);
+  for (const playerId of playersNeedingAssassins) {
+    const playerInfo = await getPlayerData(playerId, roomID);
     if (!playerInfo) {
-      console.error(`Assassin regen error: player ${player} not found`);
+      console.error(`Assassin regen error: player ${playerId} not found`);
       continue;
     }
 
@@ -693,7 +709,7 @@ async function handleAssassinRegenerationBackend(playersNeedingAssassins, aliveP
 
     // Primary assassin search
     for (const possible of randomizedAlive) {
-      if (possible === player) continue;
+      if (possible === playerId) continue;
 
       const possibleInfo = await getPlayerData(possible, roomID);
       if (!possibleInfo) continue;
@@ -701,7 +717,7 @@ async function handleAssassinRegenerationBackend(playersNeedingAssassins, aliveP
 
       if (
         possibleData.targetsLength >= MAXTARGETS ||
-        possibleData.assassins.includes(player) ||
+        possibleData.assassins.includes(playerId) ||
         newAssassinArray.includes(possible) ||
         newAssassinArray.length >= MAXTARGETS
       ) {
@@ -711,29 +727,29 @@ async function handleAssassinRegenerationBackend(playersNeedingAssassins, aliveP
       newAssassinArray.push(possible);
 
       // Update the target's targets field
-      const updatedTargets = [...possibleData.targets, player];
+      const updatedTargets = [...possibleData.targets, playerId];
       await updateTargetsForPlayer(possible, updatedTargets, roomID);
     }
 
     // Fallback — least targets
     if (newAssassinArray.length < MAXTARGETS) {
-      const fallbackList = await getAlivePlayersOrderedByTargetCount(roomID, player);
+      const fallbackList = await getAlivePlayersOrderedByTargetCount(roomID, playerId);
 
       for (const f of fallbackList) {
         if (newAssassinArray.length >= MAXTARGETS) break;
 
-        if (f.name === player) continue;
-        if (newAssassinArray.includes(f.name)) continue;
+        if (f.userId === playerId) continue;
+        if (newAssassinArray.includes(f.userId)) continue;
 
-        newAssassinArray.push(f.name);
+        newAssassinArray.push(f.userId);
 
-        const updatedTargets = [...f.targets, player];
-        await updateTargetsForPlayer(f.name, updatedTargets, roomID);
+        const updatedTargets = [...f.targets, playerId];
+        await updateTargetsForPlayer(f.userId, updatedTargets, roomID);
       }
     }
 
-    tempNewAssassins[player] = newAssassinArray.filter(t => !(playerData.assassins || []).includes(t));
-    await updateAssassinsForPlayer(player, newAssassinArray, roomID);
+    tempNewAssassins[playerId] = newAssassinArray.filter(t => !(playerData.assassins || []).includes(t));
+    await updateAssassinsForPlayer(playerId, newAssassinArray, roomID);
   }
 
   return tempNewAssassins;
@@ -837,7 +853,7 @@ async function removePlayerForRoom(userID, roomID) {
     const playerName = playerData.name;
 
     // Kill the player first (unmaps targets/assassins and updates the document)
-    await killPlayerForRoom(playerName, roomID);
+    await killPlayerForRoom(userID, roomID);
 
     // Delete the player document
     await playerDoc.ref.delete();
@@ -861,19 +877,19 @@ async function generateAndAssignTargets(roomID) {
     
     // Fetch all players
     const players = await fetchAllPlayersForRoom(roomID);
-    const playerNames = players.map(p => p.name);
+    const playerIds = players.map(p => p.userId);
     
-    if (playerNames.length === 0) {
+    if (playerIds.length === 0) {
       throw new Error('No players found in room');
     }
     
     // Generate targets using the service
-    const { targetMap, playerData } = generateTargets(playerNames);
+    const { targetMap, playerData } = generateTargets(playerIds);
     // Update database with targets and assassins
-    for (const playerName of playerNames) {
-      const playerAssassins = playerData[playerName]?.assassins || [];
-      await updateTargetsForPlayer(playerName, targetMap.get(playerName) || [], roomID);
-      await updateAssassinsForPlayer(playerName, playerAssassins, roomID);
+    for (const playerId of playerIds) {
+      const playerAssassins = playerData[playerId]?.assassins || [];
+      await updateTargetsForPlayer(playerId, targetMap.get(playerId) || [], roomID);
+      await updateAssassinsForPlayer(playerId, playerAssassins, roomID);
     }
     
     return targetMap;
@@ -991,13 +1007,13 @@ async function fetchTargetsForPlayer(playerIdentifier, roomID) {
     if (!playerSnapshot.empty) {
       const playerData = playerSnapshot.docs[0].data();
       const playerTargets = playerData.targets || [];
-      const playerName = playerData.name;
-      const openSeasonPlayers = openSeasonSnapshot.docs.map(doc => doc.data().name);
+      const playerID = playerData.userID;
+      const openSeasonPlayers = openSeasonSnapshot.docs.map(doc => doc.data().userID);
 
       // Find if the player is in open season
       let foundIndex = -1;
       for (let k = 0; k < openSeasonPlayers.length; k++) {
-        if (playerName === openSeasonPlayers[k]) {
+        if ( playerID === openSeasonPlayers[k]) {
           foundIndex = k;
           break;
         }

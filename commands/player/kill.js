@@ -11,7 +11,6 @@ const { getChannel } = require('../../services/discord/channels');
 const { removeRole, assignRole } = require('../../services/discord/roles');
 const { ApplicationCommandOptionType } = require("discord.js");
 const { fetchTargetsForPlayer,
-    fetchPointsForPlayerInRoom,
     updatePointsForPlayer,
     killPlayerForRoom,
     updateLogsForRoom,
