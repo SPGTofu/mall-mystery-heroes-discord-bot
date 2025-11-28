@@ -67,6 +67,20 @@ function createErrorAnnouncement(message) {
   });
 }
 
+/**
+ * Creates an announcement message
+ * @param {string} message - Announcement message
+ * @returns {EmbedBuilder}
+ */
+function createBroadcastAnnouncement(title, message) {
+  return createEmbed({
+    title,
+    description: message,
+    color: 0x0099ff, // Blue
+    timestamp: new Date(),
+  });
+}
+
 module.exports = {
   createEmbed,
   sendDM,
