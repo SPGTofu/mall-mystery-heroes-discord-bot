@@ -58,10 +58,14 @@ async function handleError(error, interaction) {
     message = 'An unexpected error occurred.';
   }
 
-  if (interaction.replied || interaction.deferred) {
-    await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-  } else {
-    await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: message });
+    } else {
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+    }
+  } catch (e) {
+    console.error("Error sending error reply:", e);
   }
 }
 

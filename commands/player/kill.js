@@ -68,6 +68,7 @@ module.exports = {
   ],
 
   async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
     try {
       // 1. Parse command options for assassin and target users
       const assassin = interaction.options.getUser('assassin');
@@ -76,17 +77,15 @@ module.exports = {
       const targetName = target.username;
 
       if (!assassinName || !targetName) {
-        return interaction.reply({
+        return interaction.editReply({
           content: 'You must mention both an assassin (@assassin) and a target (@target).',
-          ephemeral: true
         });
       }
 
       // 2. Check if user has GM permission
       if (!canPerformGMActions(interaction.member)) {
-        return interaction.reply({
+        return interaction.editReply({
           content: 'Only a Game Master can use this command.',
-          ephemeral: true
         });
       }
 
@@ -99,31 +98,27 @@ module.exports = {
       const targetMember = await interaction.options.getMember('target');
 
       if (!assassinMember) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `Could not find Discord member for "${assassinName}".`,
-          ephemeral: true
         });
       }
 
       if (!targetMember) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `Could not find Discord member for "${targetName}".`,
-          ephemeral: true
         });
       }
 
       // 4. Check if @target and @assassin have 'Alive' roles
       if (!hasRole(assassinMember, ROLES.ALIVE)) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `${assassinName} is not alive.`,
-          ephemeral: true
         });
       }
 
       if (!hasRole(targetMember, ROLES.ALIVE)) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `${targetName} is not alive.`,
-          ephemeral: true
         });
       }
 
@@ -132,18 +127,16 @@ module.exports = {
       try {
         assassinPlayerDoc = await fetchPlayerByUserIdForRoom(assassin.id, roomID);
       } catch (error) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `Assassin (${assassinName}) is not registered in this game.`,
-          ephemeral: true
         });
       }
       
       try {
         targetPlayerDoc = await fetchPlayerByUserIdForRoom(target.id, roomID);
       } catch (error) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `Target (${targetName}) is not registered in this game.`,
-          ephemeral: true
         });
       }
       
@@ -167,18 +160,16 @@ module.exports = {
         assassinTargets = await fetchTargetsForPlayer(assassin.id, roomID);
       } catch (error) {
         console.error('Error fetching targets for assassin:', error);
-        return interaction.reply({
+        return interaction.editReply({
           content: `Error fetching targets for ${assassinDbName}: ${error.message}`,
-          ephemeral: true
         });
       }
       
       if (!hasTargetAssignment(assassinTargets, target.id, targetDbName)) {
         const message = createErrorAnnouncement(`<@${assassin.id}> does not have <@${target.id}> as a target. Kill not valid.`);
         await gmChannel.send({ embeds: [message] });
-        return interaction.reply({
+        return interaction.editReply({
           embeds: [message],
-          ephemeral: true
         });
       }
 
@@ -252,16 +243,14 @@ module.exports = {
       });
 
       // Reply to the interaction
-      await interaction.reply({
+      await interaction.editReply({
         content: `✅ Kill recorded! ${assassinDbName} assassinated ${targetDbName}.`,
-        ephemeral: true
       });
 
     } catch (error) {
       console.error('Error handling /kill command:', error);
-      await interaction.reply({
+      await interaction.editReply({
         content: `Error recording kill: ${error.message}`,
-        ephemeral: true
       });
     }
   },

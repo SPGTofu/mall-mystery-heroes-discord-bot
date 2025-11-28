@@ -73,7 +73,7 @@ module.exports = {
         // Mark all active tasks complete
         const activeTasks = tasks.filter(t => !t.isComplete);
         if (activeTasks.length === 0) {
-          return await interaction.reply({ content: '✅ There are no active tasks to complete.', ephemeral: true });
+          return await interaction.editReply({ content: '✅ There are no active tasks to complete.', ephemeral: true });
         }
 
         const now = new Date().toISOString();
@@ -119,7 +119,7 @@ module.exports = {
 
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
-        return await interaction.reply({ content: `✅ Completed ${succeeded} task(s). ${failed ? `${failed} failed to update (see logs).` : ''}`, ephemeral: true });
+        return await interaction.editReply({ content: `✅ Completed ${succeeded} task(s). ${failed ? `${failed} failed to update (see logs).` : ''}`, ephemeral: true });
       }
       let found = tasks.find(t => (t.titleTrimmedLowerCase || (t.name || '').replace(/\s/g, '').toLowerCase()) === normalized || (t.name || '').toLowerCase() === taskNameInput.toLowerCase());
 
@@ -129,7 +129,7 @@ module.exports = {
       }
 
       if (!found) {
-        return await interaction.reply({ content: `❌ Task not found: ${taskNameInput}`, ephemeral: true });
+        return await interaction.editReply({ content: `❌ Task not found: ${taskNameInput}`, ephemeral: true });
       }
 
       // Allow single-task completion without specifying a player.
@@ -286,7 +286,7 @@ module.exports = {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: `❌ An error occurred: ${error.message}` });
       } else {
-        await interaction.reply({ content: `❌ An error occurred: ${error.message}`, ephemeral: true });
+        await interaction.editReply({ content: `❌ An error occurred: ${error.message}`, ephemeral: true });
       }
     }
   },
