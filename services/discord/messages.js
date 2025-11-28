@@ -85,6 +85,7 @@ module.exports = {
   createEmbed,
   sendDM,
   createAnnouncement,
-  createErrorAnnouncement
+  createErrorAnnouncement,
+  createBroadcastAnnouncement
 };
 

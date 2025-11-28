@@ -15,6 +15,7 @@ const { fetchTargetsForPlayer,
     killPlayerForRoom,
     updateLogsForRoom,
     fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
+const { canPerformGMActions } = require('../../utils/permissions');
 
 module.exports = {
   name: 'kill',
@@ -50,7 +51,7 @@ module.exports = {
       }
 
       // 2. Check if user has GM permission
-      if (!isGameMaster(interaction.member)) {
+      if (!canPerformGMActions(interaction.member)) {
         return interaction.reply({
           content: 'Only a Game Master can use this command.',
           ephemeral: true
@@ -121,6 +122,7 @@ module.exports = {
       const assassinDbName = assassinPlayerData.name;
       const targetDbName = targetPlayerData.name;
       
+      
       // Get points directly from the player data we already fetched
       const assassinPoints = parseInt(assassinPlayerData.score || 0);
       const targetPoints = parseInt(targetPlayerData.score || 0);
@@ -140,11 +142,11 @@ module.exports = {
       }
       
       // Compare against database name, not Discord username
-      if (!assassinTargets.includes(targetDbName)) {
+      if (!assassinTargets.includes(target.id)) {
         const message = createErrorAnnouncement(`<@${assassin.id}> does not have <@${target.id}> as a target. Kill not valid.`);
         await gmChannel.send({ embeds: [message] });
         return interaction.reply({
-          content: `${assassinDbName} does not have ${targetDbName} as a target. Kill not valid.`,
+          embeds: [message],
           ephemeral: true
         });
       }

@@ -334,40 +334,15 @@ async function getOrCreateOpenSeasonRole(guild) {
 /**
  * Gets or creates all roles needed for a game
  * @param {Guild} guild - The Discord guild
- * @returns {Promise<String>}
- * @throws {Error}
+ * @returns {Promise<null>}
  */
 async function getOrCreateAllRolesForRoom(guild) {
-  try {
-    await getOrCreateGameMasterRole(guild);
-    await getOrCreatePlayerRole(guild);
-    await getOrCreateAliveRole(guild);
-    await getOrCreateDeadRole(guild);
-    await getOrCreateOpenSeasonRole(guild);
-  } catch (e) {
-    throw new Error('Error creating all roles for the room: ', e);
-  }
-}
-
-/**
- * Deletes all roles needed for a game except game master
- * @returns {Promise<String>} DO NOT USE!!! IT DOESN"T WORK
- * @throws {Error}
- */
-async function deleteAllRolesForRoom(guild) {
-  const roleNames = [
-    ROLES.PLAYER,
-    ROLES.ALIVE,
-    ROLES.DEAD,
-    ROLES.OPEN_SEASON
-  ];
-
-  for (const roleName of roleNames) {
-    const role = guild.roles.cache.find(r => r.name === roleName);
-    if (role) {
-      await deleteRole(role);
-    }
-  }
+  await getOrCreateGameMasterRole(guild);
+  await getOrCreatePlayerRole(guild);
+  await getOrCreateAliveRole(guild);
+  await getOrCreateDeadRole(guild);
+  await getOrCreateOpenSeasonRole(guild);
+  return null;
 }
 
 module.exports = {
@@ -380,7 +355,7 @@ module.exports = {
   getOrCreatePlayerRole,
   getOrCreateAliveRole,
   getOrCreateDeadRole,
-  getOrCreateAllRolesForRoom,
-  deleteAllRolesForRoom
+  getOrCreateOpenSeasonRole,
+  getOrCreateAllRolesForRoom
 };
 

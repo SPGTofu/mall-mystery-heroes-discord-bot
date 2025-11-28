@@ -321,7 +321,7 @@ async function setIsAliveForPlayer(playerIdentifier, isAlive, roomID) {
 
 /**
  * Updates targets for a player
- * @param {string} playerIdentifier - userId or Player Name
+ * @param {string} playerIdentifier - userID or Player Name
  * @param {Array<string>} targets - Array of target names
  * @param {string} roomID - Room ID
  * @returns {Promise<void>}
@@ -389,7 +389,7 @@ async function unmapPlayers(playerIdentifier, roomID) {
 
   // Try userID first
   let playerSnapshot = await playersRef.where('userID', '==', playerIdentifier).get();
-  if (snapshot.empty) {
+  if (playerSnapshot.empty) {
     playerSnapshot = await playersRef.where('name', '==', playerIdentifier).get();
   }
 
@@ -512,7 +512,7 @@ async function handleReviveForPlayer(playerIdentifier, roomID, points = 0) {
 
     // Fetch alive players for remap
     const aliveSnap = await playersRef.where('isAlive', '==', true).get();
-    const alivePlayers = aliveSnap.docs.map(doc => doc.data().userId);
+    const alivePlayers = aliveSnap.docs.map(doc => doc.data().userID);
 
     // For now: revived player needs both targets & assassins
     const playersNeedingTargets = [playerIdentifier];
@@ -585,7 +585,7 @@ async function getPlayerData(playerIdentifier, roomID) {
 async function getAlivePlayers(roomID) {
   const playersRef = db.collection('rooms').doc(roomID).collection('players');
   const snap = await playersRef.where('isAlive', '==', true).get();
-  return snap.docs.map(doc => doc.data().userId);
+  return snap.docs.map(doc => doc.data().userID);
 }
 
 /** Fetch alive players ordered by assassin count ASC */
@@ -594,7 +594,7 @@ async function getAlivePlayersOrderedByAssassinCount(roomID, excludePlayerId = n
   const snap = await playersRef.where('isAlive', '==', true).orderBy('assassinsLength', 'asc').get();
   return snap.docs
     .map(doc => doc.data())
-    .filter(p => p.userId !== excludePlayerId);
+    .filter(p => p.userID !== excludePlayerId);
 }
 
 /** Fetch alive players ordered by target count ASC */
@@ -603,7 +603,7 @@ async function getAlivePlayersOrderedByTargetCount(roomID, excludePlayerId = nul
   const snap = await playersRef.where('isAlive', '==', true).orderBy('targetsLength', 'asc').get();
   return snap.docs
     .map(doc => doc.data())
-    .filter(p => p.userId !== excludePlayerId);
+    .filter(p => p.userID !== excludePlayerId);
 }
 
 /** Randomize any array */
@@ -657,7 +657,7 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
       newTargetArray.push(possible);
 
       // Update assassins for possible target
-      const updatedAssassins = [...possibleData.assassins, player];
+      const updatedAssassins = [...possibleData.assassins, playerId];
       await updateAssassinsForPlayer(possible, updatedAssassins, roomID);
     }
 
@@ -668,12 +668,12 @@ async function handleTargetRegenerationBackend(playersNeedingTargets, alivePlaye
       for (const f of fallbackList) {
         if (newTargetArray.length >= MAXTARGETS) break;
 
-        if (f.userId === playerId) continue;
-        if (newTargetArray.includes(f.userId)) continue;
+        if (f.userID === playerId) continue;
+        if (newTargetArray.includes(f.userID)) continue;
 
-        newTargetArray.push(f.userId);
+        newTargetArray.push(f.userID);
         const fAssassinsUpdated = [...f.assassins, playerId];
-        await updateAssassinsForPlayer(f.userId, fAssassinsUpdated, roomID);
+        await updateAssassinsForPlayer(f.userID, fAssassinsUpdated, roomID);
       }
     }
 
@@ -738,13 +738,13 @@ async function handleAssassinRegenerationBackend(playersNeedingAssassins, aliveP
       for (const f of fallbackList) {
         if (newAssassinArray.length >= MAXTARGETS) break;
 
-        if (f.userId === playerId) continue;
-        if (newAssassinArray.includes(f.userId)) continue;
+        if (f.userID === playerId) continue;
+        if (newAssassinArray.includes(f.userID)) continue;
 
-        newAssassinArray.push(f.userId);
+        newAssassinArray.push(f.userID);
 
         const updatedTargets = [...f.targets, playerId];
-        await updateTargetsForPlayer(f.userId, updatedTargets, roomID);
+        await updateTargetsForPlayer(f.userID, updatedTargets, roomID);
       }
     }
 
@@ -877,7 +877,7 @@ async function generateAndAssignTargets(roomID) {
     
     // Fetch all players
     const players = await fetchAllPlayersForRoom(roomID);
-    const playerIds = players.map(p => p.userId);
+    const playerIds = players.map(p => p.userID);
     
     if (playerIds.length === 0) {
       throw new Error('No players found in room');
