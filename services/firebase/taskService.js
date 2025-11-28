@@ -20,7 +20,7 @@ async function createTask(guildId, gameId, taskObject) {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    const tasksRef = db.collection('games').doc(guildId).collection('tasks');
+    const tasksRef = db.collection('rooms').doc(guildId).collection('tasks');
     const docRef = await tasksRef.add(taskData);
     console.log(`Task created with ID: ${docRef.id}`);
     return docRef.id;
@@ -38,7 +38,7 @@ async function createTask(guildId, gameId, taskObject) {
  */
 async function getTask(guildId, taskId) {
   try {
-    const docRef = db.collection('games').doc(guildId).collection('tasks').doc(taskId);
+    const docRef = db.collection('rooms').doc(guildId).collection('tasks').doc(taskId);
     const doc = await docRef.get();
     if (!doc.exists) throw new Error(`Task ${taskId} not found`);
     return { id: doc.id, ...doc.data() };
@@ -56,7 +56,7 @@ async function getTask(guildId, taskId) {
  */
 async function getAllTasks(guildId, gameId = null) {
   try {
-    let tasksRef = db.collection('games').doc(guildId).collection('tasks');
+    let tasksRef = db.collection('rooms').doc(guildId).collection('tasks');
     let query = tasksRef;
     
     // Filter by gameId if provided
@@ -82,7 +82,7 @@ async function getAllTasks(guildId, gameId = null) {
  */
 async function updateTask(guildId, taskId, updateData) {
   try {
-    const docRef = db.collection('games').doc(guildId).collection('tasks').doc(taskId);
+    const docRef = db.collection('rooms').doc(guildId).collection('tasks').doc(taskId);
     const dataToUpdate = { ...updateData, updatedAt: new Date() };
     // If task is being marked complete, set completedAt timestamp
     if (updateData && updateData.isComplete === true && !updateData.completedAt) {
@@ -101,7 +101,7 @@ async function updateTask(guildId, taskId, updateData) {
  */
 async function deleteTask(guildId, taskId) {
   try {
-    const docRef = db.collection('games').doc(guildId).collection('tasks').doc(taskId);
+    const docRef = db.collection('rooms').doc(guildId).collection('tasks').doc(taskId);
     await docRef.delete();
     console.log(`Task ${taskId} deleted`);
   } catch (error) {
@@ -115,7 +115,7 @@ async function deleteTask(guildId, taskId) {
  */
 async function completeTask(guildId, taskId, playerId) {
   try {
-    const docRef = db.collection('games').doc(guildId).collection('tasks').doc(taskId);
+    const docRef = db.collection('rooms').doc(guildId).collection('tasks').doc(taskId);
     const doc = await docRef.get();
     if (!doc.exists) throw new Error(`Task ${taskId} not found`);
 
