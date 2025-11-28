@@ -30,7 +30,7 @@ module.exports = {
     const playerRole = guild.roles.cache.find(r => r.name === ROLES.PLAYER);
     let errorMessage = 'Default Error Message'
     const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS)
-    const messageContent = interaction.options.getString('broadcast');
+    const messageContent = interaction.options.getString('message');
 
     // Check if user is GM
     const member = interaction.member;
