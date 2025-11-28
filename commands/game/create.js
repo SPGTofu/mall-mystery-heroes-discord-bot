@@ -7,7 +7,7 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, handleError } = require('../../utils/errors');
 const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateRole, deleteRole } = require('../../services/discord/roles');
+const { getOrCreateRole, deleteRole, createRole, getOrCreatePlayerRole, getOrCreateGameMasterRole, getOrCreateAliveRole, getOrCreateDeadRole, getOrCreateAllRolesForRoom, deleteAllRolesForRoom } = require('../../services/discord/roles');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
@@ -97,15 +97,25 @@ module.exports = {
         }
       }
 
+      // Reset all roles (delete game-specific roles)
+      await interaction.editReply('Resetting roles...');
+      // DOESNT WORK ATM
+      // try {
+      //   await deleteAllRolesForRoom(guild);
+      // } catch (e) {
+      //   console.error(e)
+      // }
+
+      // Get or create all roles
+      const allRoles = await getOrCreateAllRolesForRoom(guild);
+      const gmRole = await getOrCreateGameMasterRole(guild);
+
       // Create DMs category
       await interaction.editReply('Creating DMs category...');
       const dmCategory = await getOrCreateChannel(guild, CHANNELS.DMS_CATEGORY, { type: 4 });
 
       // Create Game Masters channel with only GMs and bot
       await interaction.editReply('Creating Game Masters channel...');
-      
-      // Get or create GM role
-      const gmRole = await getOrCreateRole(guild, ROLES.GAME_MASTER);
       
       // Create Game Masters channel with permissions
       const gameMastersChannel = await getOrCreateChannel(guild, CHANNELS.GAME_MASTERS, {
@@ -127,21 +137,6 @@ module.exports = {
         ]
       });
 
-      // Reset all roles (delete game-specific roles)
-      await interaction.editReply('Resetting roles...');
-      const gameRoles = [ROLES.PLAYER, ROLES.ALIVE, ROLES.DEAD];
-      
-      for (const roleName of gameRoles) {
-        const role = guild.roles.cache.find(r => r.name === roleName);
-        if (role) {
-          try {
-            await deleteRole(role);
-          } catch (error) {
-            console.error(`Error deleting role ${roleName}:`, error);
-          }
-        }
-      }
-
       // Get or create general channel
       const generalChannel = await getOrCreateChannel(guild, CHANNELS.GENERAL);
 
@@ -151,7 +146,6 @@ module.exports = {
       const rulesMessage = createEmbed({
         title: '📜 Game Rules',
         description: `Welcome to Mall Mystery Heroes!
-
 **How to Play:**
 - Players are assigned secret targets
 - Eliminate your targets by taking identifiable photos

@@ -319,6 +319,57 @@ async function getOrCreateDeadRole(guild) {
   });
 }
 
+/**
+ * Gets or creates the Open Season role
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<Role>}
+ */
+async function getOrCreateOpenSeasonRole(guild) {
+  return getOrCreateRole(guild, ROLES.OPEN_SEASON, {
+    color: ROLE_COLORS.OPEN_SEASON,
+    reason: 'Dead role needed for Mall Mystery Heroes',
+  });
+}
+
+/**
+ * Gets or creates all roles needed for a game
+ * @param {Guild} guild - The Discord guild
+ * @returns {Promise<String>}
+ * @throws {Error}
+ */
+async function getOrCreateAllRolesForRoom(guild) {
+  try {
+    await getOrCreateGameMasterRole(guild);
+    await getOrCreatePlayerRole(guild);
+    await getOrCreateAliveRole(guild);
+    await getOrCreateDeadRole(guild);
+    await getOrCreateOpenSeasonRole(guild);
+  } catch (e) {
+    throw new Error('Error creating all roles for the room: ', e);
+  }
+}
+
+/**
+ * Deletes all roles needed for a game except game master
+ * @returns {Promise<String>} DO NOT USE!!! IT DOESN"T WORK
+ * @throws {Error}
+ */
+async function deleteAllRolesForRoom(guild) {
+  const roleNames = [
+    ROLES.PLAYER,
+    ROLES.ALIVE,
+    ROLES.DEAD,
+    ROLES.OPEN_SEASON
+  ];
+
+  for (const roleName of roleNames) {
+    const role = guild.roles.cache.find(r => r.name === roleName);
+    if (role) {
+      await deleteRole(role);
+    }
+  }
+}
+
 module.exports = {
   createRole,
   deleteRole,
@@ -329,5 +380,7 @@ module.exports = {
   getOrCreatePlayerRole,
   getOrCreateAliveRole,
   getOrCreateDeadRole,
+  getOrCreateAllRolesForRoom,
+  deleteAllRolesForRoom
 };
 
