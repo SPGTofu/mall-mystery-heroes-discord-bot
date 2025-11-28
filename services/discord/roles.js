@@ -334,8 +334,7 @@ async function getOrCreateOpenSeasonRole(guild) {
 /**
  * Gets or creates all roles needed for a game
  * @param {Guild} guild - The Discord guild
- * @returns {Promise<String>}
- * @throws {Error}
+ * @returns {Promise<null>}
  */
 async function getOrCreateAllRolesForRoom(guild) {
   try {
@@ -387,6 +386,7 @@ module.exports = {
   getOrCreatePlayerRole,
   getOrCreateAliveRole,
   getOrCreateDeadRole,
+  getOrCreateOpenSeasonRole,
   getOrCreateAllRolesForRoom,
   deleteAllRolesForRoom
 };

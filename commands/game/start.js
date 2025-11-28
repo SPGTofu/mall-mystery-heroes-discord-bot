@@ -83,15 +83,19 @@ module.exports = {
 
       // Send targets to each player
       for (const player of players) {
-        const targets = targetMap.get(player.name) || [];
+        const targets = targetMap.get(player.userID) || [];
+        const targetNames = targets.map(tid => {
+          const target = players.find(p => p.userID === tid);
+          return target ? target.name : tid;
+        });
         const channelName = player.name.toLowerCase().replace(/\s+/g, '-');
         const dmChannel = dmsCategory.children.cache.find(
           ch => ch.name.toLowerCase() === channelName.toLowerCase()
         );
 
         if (dmChannel) {
-          const targetsList = targets.length > 0 
-            ? targets.map((t, i) => `${i + 1}. **${t}**`).join('\n')
+          const targetsList = targetNames.length > 0 
+            ? targetNames.map((t, i) => `${i + 1}. **${t}**`).join('\n')
             : 'No targets assigned.';
 
           const targetEmbed = createEmbed({

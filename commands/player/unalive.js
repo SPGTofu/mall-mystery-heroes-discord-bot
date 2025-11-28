@@ -4,11 +4,18 @@
  */
 
 const { ApplicationCommandOptionType } = require("discord.js");
-const { killPlayerForRoom } = require("../../services/firebase/dbCallsAdapter");
+const { killPlayerForRoom, getRoom, fetchPlayerByUserIdForRoom } = require("../../services/firebase/dbCallsAdapter");
 const { hasRole } = require("../../services/discord/permissions");
 const { ROLES } = require("../../config/roles");
 const { createErrorAnnouncement, createAnnouncement } = require("../../services/discord/messages");
 const { removeRole, assignRole } = require("../../services/discord/roles");
+const { GameError } = require("../../utils/errors");
+const {
+  getDmsCategory,
+  notifyPlayerEliminated,
+  remapAndNotifyTargets,
+  dedupeIds,
+} = require("../../services/game/playerTargetUpdates");
 
 module.exports = {
   name: 'unalive',
@@ -34,12 +41,11 @@ module.exports = {
       throw new GameError('No game has been created yet.');
     }
 
-    // Only GM can revive
+    // Only GM can mark unalive
     if (!hasRole(sender, ROLES.GAME_MASTER)) {
-      const message = createErrorAnnouncement(`${sender} tried to kill ${playerToBeDead}, but they are not a GM.`);
-      await gmChannel.send({ embeds: [message] })
-      message = 'You are not a Game Master'
-      return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
+      const gmMessage = createErrorAnnouncement(`${sender} tried to kill ${playerToBeDead}, but they are not a GM.`);
+      await gmChannel.send({ embeds: [gmMessage] });
+      return interaction.reply({ embeds: [gmMessage], flags: ['Ephemeral'] });
     }
 
     // Cannot kill someone already dead
@@ -52,12 +58,24 @@ module.exports = {
 
     // Cannot unalive a GM
     if (hasRole(member, ROLES.GAME_MASTER)) {
-      const message = createErrorAnnouncement(`${playerToRevive} cannot be unalived. They are a Game Master.`);
+      const message = createErrorAnnouncement(`${playerToBeDead} cannot be unalived. They are a Game Master.`);
       await gmChannel.send({ embeds: [message] });
       return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
     }
 
     try {
+      let targetPlayerDoc;
+      try {
+        targetPlayerDoc = await fetchPlayerByUserIdForRoom(playerToBeDead.id, roomID);
+      } catch (error) {
+        const message = createErrorAnnouncement(`${playerToBeDead} is not registered in this game.`);
+        await gmChannel.send({ embeds: [message] });
+        return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
+      }
+
+      const targetPlayerData = targetPlayerDoc.data();
+      const targetDbName = targetPlayerData.name || playerToBeDead.username;
+
       await killPlayerForRoom(playerToBeDead.id, roomID);
 
       // change status of user on Discord
@@ -66,6 +84,18 @@ module.exports = {
       const message = createAnnouncement('Player Update', `${playerToBeDead} has been killed`);
 
       await interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
+
+      const dmsCategory = getDmsCategory(interaction.guild);
+      await notifyPlayerEliminated(dmsCategory, playerToBeDead.id, targetDbName);
+      const playersNeedingTargets = dedupeIds(targetPlayerData.assassins || []);
+      const playersNeedingAssassins = dedupeIds(targetPlayerData.targets || []);
+      await remapAndNotifyTargets({
+        guild: interaction.guild,
+        roomID,
+        playersNeedingTargets,
+        playersNeedingAssassins,
+        dmsCategoryOverride: dmsCategory,
+      });
     } catch (e) {
       const message = createErrorAnnouncement(`An error occurred killing ${playerToBeDead}: ${e}`);
       await gmChannel.send({ embeds: [message] });
@@ -73,4 +103,3 @@ module.exports = {
     }
   },
 };
-
