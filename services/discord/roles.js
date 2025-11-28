@@ -337,12 +337,43 @@ async function getOrCreateOpenSeasonRole(guild) {
  * @returns {Promise<null>}
  */
 async function getOrCreateAllRolesForRoom(guild) {
-  await getOrCreateGameMasterRole(guild);
-  await getOrCreatePlayerRole(guild);
-  await getOrCreateAliveRole(guild);
-  await getOrCreateDeadRole(guild);
-  await getOrCreateOpenSeasonRole(guild);
-  return null;
+  try {
+    await getOrCreateGameMasterRole(guild);
+    await getOrCreatePlayerRole(guild);
+    await getOrCreateAliveRole(guild);
+    await getOrCreateDeadRole(guild);
+    await getOrCreateOpenSeasonRole(guild);
+  } catch (e) {
+    throw new Error('Error creating all roles for the room: ', e);
+  }
+}
+
+/**
+ * Deletes all game-specific roles created by the bot
+ * @param {Guild} guild
+ * @returns {Promise<void>}
+ */
+async function deleteAllRolesForRoom(guild) {
+  assertGuild(guild);
+
+  const roleNames = [
+    ROLES.GAME_MASTER,
+    ROLES.PLAYER,
+    ROLES.ALIVE,
+    ROLES.DEAD,
+    ROLES.OPEN_SEASON
+  ];
+
+  for (const roleName of roleNames) {
+    const role = guild.roles.cache.find(r => r.name === roleName);
+    if (role) {
+      try {
+        await deleteRole(role);
+      } catch (error) {
+        console.warn(`Unable to delete role "${roleName}":`, error.message);
+      }
+    }
+  }
 }
 
 module.exports = {

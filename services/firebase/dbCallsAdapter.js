@@ -5,6 +5,16 @@
 
 const { db } = require('./config');
 
+async function deleteCollection(collectionRef, batchSize = 500) {
+  let snapshot = await collectionRef.limit(batchSize).get();
+  while (!snapshot.empty) {
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    snapshot = await collectionRef.limit(batchSize).get();
+  }
+}
+
 /**
  * Checks if roomID already exists
  * Admin SDK version of checkForRoomIDDupes
@@ -34,6 +44,32 @@ async function createOrUpdateRoom(roomID, data) {
     await roomRef.set(data, { merge: true });
   } catch (error) {
     console.error('Error creating/updating room:', error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes a room document and all nested data
+ * @param {string} roomID - Room ID
+ * @returns {Promise<void>}
+ */
+async function deleteRoomAndData(roomID) {
+  try {
+    const roomRef = db.collection('rooms').doc(roomID);
+    const roomSnapshot = await roomRef.get();
+
+    if (!roomSnapshot.exists) {
+      console.log(`Room ${roomID} already deleted.`);
+      return;
+    }
+
+    const playersRef = roomRef.collection('players');
+    await deleteCollection(playersRef);
+
+    await roomRef.delete();
+    console.log(`Room ${roomID} and its data deleted successfully.`);
+  } catch (error) {
+    console.error('Error deleting room data:', error);
     throw error;
   }
 }
@@ -1113,6 +1149,7 @@ module.exports = {
   checkForRoomIDDupes,
   createOrUpdateRoom,
   getRoom,
+  deleteRoomAndData,
   endGame,
   fetchAlivePlayersForRoom,
   fetchAllPlayersWithScores,
