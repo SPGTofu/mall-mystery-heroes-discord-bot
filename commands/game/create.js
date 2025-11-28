@@ -7,17 +7,23 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateRole, deleteRole, createRole, getOrCreatePlayerRole, getOrCreateGameMasterRole, getOrCreateAliveRole, getOrCreateDeadRole, getOrCreateAllRolesForRoom, deleteAllRolesForRoom } = require('../../services/discord/roles');
+const { getOrCreateGameMasterRole, getOrCreateAllRolesForRoom } = require('../../services/discord/roles');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
-const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'create',
   description: 'Create a new game',
   async execute(interaction) {
     try {
+      // Check if channel is general
+      if (interaction.channel.name !== CHANNELS.GENERAL) {
+        return interaction.reply({
+          content: "/game create can only be done in #general.",
+          ephemeral: true
+        })
+      }
       // Check GM permissions
       if (!canPerformGMActions(interaction.member)) {
         throw new PermissionError('Only Game Masters can create a game.');

@@ -10,6 +10,7 @@ const { hasRole } = require("../../services/discord/permissions");
 const { ROLES } = require("../../config/roles");
 const { removeRole, assignRole } = require("../../services/discord/roles");
 const { GameError } = require("../../utils/errors");
+const { remapAndNotifyTargets } = require("../../services/game/playerTargetUpdates");
 
 module.exports = {
   name: 'revive',
@@ -87,13 +88,20 @@ module.exports = {
     try {
       const points = interaction.options.getInteger('points') || 0;
 
-      await handleReviveForPlayer(playerToRevive.id, roomID, points);
+      await handleReviveForPlayer(playerToRevive.id, roomID, points, { skipRemap: true });
 
       // Update Discord roles
       await removeRole(member, ROLES.DEAD);
       await assignRole(member, ROLES.ALIVE);
 
-      const message = createAnnouncement('Success', `${playerToRevive} has been revived with ${points} points!`);
+      await remapAndNotifyTargets({
+        guild: interaction.guild,
+        roomID,
+        playersNeedingTargets: [playerToRevive.id],
+        playersNeedingAssassins: [playerToRevive.id],
+      });
+ 
+      const message = createAnnouncement('Player Revived', `${playerToRevive} has been revived with ${points} points!`);
       await gmChannel.send({ embeds: [message] })
       return interaction.reply({ embeds: [message], flags: ['Ephemeral'] });
 
