@@ -8,6 +8,7 @@
 const { EmbedBuilder, ApplicationCommandOptionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { canPerformGMActions } = require('../../utils/permissions');
 const { createTask } = require('../../services/firebase/taskService');
+const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 const GAME_RULES = require('../../config/gameRules');
 
 module.exports = {
@@ -65,6 +66,22 @@ module.exports = {
       if (!isAdmin && !isGM) {
         return await interaction.reply({
           content: '❌ You do not have permission to create tasks. GM role required.',
+          ephemeral: true,
+        });
+      }
+
+      const roomSnapshot = await getRoom(interaction.guildId);
+      if (!roomSnapshot.exists) {
+        return await interaction.reply({
+          content: '❌ No game room exists. Use /game create and /game start before managing tasks.',
+          ephemeral: true,
+        });
+      }
+
+      const roomData = roomSnapshot.data();
+      if (!roomData.isGameActive) {
+        return await interaction.reply({
+          content: '⚠️ Tasks can only be created while a game is running. Start the game with /game start first.',
           ephemeral: true,
         });
       }

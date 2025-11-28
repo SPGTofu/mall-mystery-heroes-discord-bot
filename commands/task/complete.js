@@ -6,6 +6,7 @@ const { getOrCreateChannel } = require('../../services/discord/channels');
 const { getOrCreateAliveRole, getOrCreateDeadRole } = require('../../services/discord/roles');
 const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer } = require('../../services/firebase/dbCallsAdapter');
 const { ROLES } = require('../../config/roles');
+const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 
 /**
  * /task complete command
@@ -38,6 +39,20 @@ module.exports = {
       const guildMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
       if (!canPerformGMActions(guildMember)) {
         return await interaction.editReply({ content: '❌ You do not have permission to complete tasks. GM role required.' });
+      }
+
+      const roomSnapshot = await getRoom(interaction.guildId);
+      if (!roomSnapshot.exists) {
+        return await interaction.editReply({
+          content: '❌ No game room exists. Create and start a game before managing tasks.',
+        });
+      }
+
+      const roomData = roomSnapshot.data();
+      if (!roomData.isGameActive) {
+        return await interaction.editReply({
+          content: '⚠️ Tasks can only be managed while a game is running. Start the game with /game start first.',
+        });
       }
 
       const taskNameInput = interaction.options.getString('task_name', true).trim();
