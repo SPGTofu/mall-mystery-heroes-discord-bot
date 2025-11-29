@@ -9,6 +9,42 @@ const { ROLES } = require('../../config/roles');
 const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 
 /**
+ * Formats the "already completed task" error with a user-friendly message
+ * @param {Error} error - The error object
+ * @param {Interaction} interaction - The Discord interaction
+ * @param {User|null} playerUser - Optional player user object from the command
+ * @returns {Promise<string|null>} Formatted error message or null if not the right error
+ */
+async function formatAlreadyCompletedError(error, interaction, playerUser = null) {
+  if (!error.message || !error.message.includes('already completed task')) {
+    return null;
+  }
+
+  // If we have playerUser, use that directly
+  if (playerUser) {
+    return `❌ ${playerUser} has already completed this task.`;
+  }
+
+  // Try to extract player ID from error message
+  const playerIdMatch = error.message.match(/Player (\d+) already completed task/);
+  if (playerIdMatch && playerIdMatch[1]) {
+    const playerId = playerIdMatch[1];
+    try {
+      // Fetch the member to get their name/mention
+      const member = await interaction.guild.members.fetch(playerId).catch(() => null);
+      if (member) {
+        return `❌ ${member} has already completed this task.`;
+      }
+    } catch (fetchError) {
+      // Fall through to default error message
+    }
+  }
+
+  // Fallback to original error message
+  return null;
+}
+
+/**
  * /task complete command
  * Marks a player as having completed a task (GM only)
  */
@@ -152,6 +188,13 @@ module.exports = {
         }
       } catch (err) {
         console.error('Error completing task:', err);
+        
+        // Try to format "already completed task" error with user-friendly message
+        const formattedError = await formatAlreadyCompletedError(err, interaction, playerUser);
+        if (formattedError) {
+          return await interaction.editReply({ content: formattedError });
+        }
+        
         return await interaction.editReply({ content: `❌ Unable to complete task: ${err.message}` });
       }
 
