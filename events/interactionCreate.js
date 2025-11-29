@@ -4,7 +4,7 @@
  */
 
 const { Events } = require('discord.js');
-const { routeInteraction, loadCommands } = require('../handlers/commandHandler');
+const { routeInteraction, routeAutocomplete, loadCommands } = require('../handlers/commandHandler');
 const modalInteractionCreate = require('./modalInteractionCreate');
 
 module.exports = {
@@ -13,6 +13,12 @@ module.exports = {
     // Handle modal submissions
     if (interaction.isModalSubmit()) {
       await modalInteractionCreate.execute(interaction);
+      return;
+    }
+
+    // Handle autocomplete interactions
+    if (interaction.isAutocomplete()) {
+      await routeAutocomplete(interaction);
       return;
     }
 

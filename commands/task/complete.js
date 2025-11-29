@@ -9,6 +9,42 @@ const { ROLES } = require('../../config/roles');
 const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 
 /**
+ * Formats the "already completed task" error with a user-friendly message
+ * @param {Error} error - The error object
+ * @param {Interaction} interaction - The Discord interaction
+ * @param {User|null} playerUser - Optional player user object from the command
+ * @returns {Promise<string|null>} Formatted error message or null if not the right error
+ */
+async function formatAlreadyCompletedError(error, interaction, playerUser = null) {
+  if (!error.message || !error.message.includes('already completed task')) {
+    return null;
+  }
+
+  // If we have playerUser, use that directly
+  if (playerUser) {
+    return `❌ ${playerUser} has already completed this task.`;
+  }
+
+  // Try to extract player ID from error message
+  const playerIdMatch = error.message.match(/Player (\d+) already completed task/);
+  if (playerIdMatch && playerIdMatch[1]) {
+    const playerId = playerIdMatch[1];
+    try {
+      // Fetch the member to get their name/mention
+      const member = await interaction.guild.members.fetch(playerId).catch(() => null);
+      if (member) {
+        return `❌ ${member} has already completed this task.`;
+      }
+    } catch (fetchError) {
+      // Fall through to default error message
+    }
+  }
+
+  // Fallback to original error message
+  return null;
+}
+
+/**
  * /task complete command
  * Marks a player as having completed a task (GM only)
  */
@@ -21,6 +57,7 @@ module.exports = {
       description: 'The task name to mark complete',
       type: ApplicationCommandOptionType.String,
       required: true,
+      autocomplete: true,
     },
     {
       name: 'player',
@@ -151,6 +188,13 @@ module.exports = {
         }
       } catch (err) {
         console.error('Error completing task:', err);
+        
+        // Try to format "already completed task" error with user-friendly message
+        const formattedError = await formatAlreadyCompletedError(err, interaction, playerUser);
+        if (formattedError) {
+          return await interaction.editReply({ content: formattedError });
+        }
+        
         return await interaction.editReply({ content: `❌ Unable to complete task: ${err.message}` });
       }
 
@@ -288,6 +332,71 @@ module.exports = {
       } else {
         await interaction.editReply({ content: `❌ An error occurred: ${error.message}`, ephemeral: true });
       }
+    }
+  },
+
+  async autocomplete(interaction) {
+    try {
+      const focusedOption = interaction.options.getFocused(true);
+      
+      // Only handle autocomplete for task_name
+      if (focusedOption.name !== 'task_name') {
+        await interaction.respond([]).catch(() => {});
+        return;
+      }
+
+      const userInput = focusedOption.value.toLowerCase().trim();
+      
+      // Get all tasks for this guild
+      const tasks = await getAllTasks(interaction.guildId, interaction.guildId);
+      
+      // Filter to only active (incomplete) tasks
+      const activeTasks = tasks.filter(task => !task.isComplete);
+      
+      // Filter tasks based on user input
+      let filteredTasks = activeTasks;
+      if (userInput.length > 0) {
+        filteredTasks = activeTasks.filter(task => {
+          const taskName = (task.name || '').toLowerCase();
+          return taskName.includes(userInput);
+        });
+      }
+      
+      // Sort by name for better UX
+      filteredTasks.sort((a, b) => {
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      
+      // Limit to 25 choices (Discord's maximum)
+      const choices = filteredTasks.slice(0, 25).map(task => ({
+        name: task.name || 'Unnamed Task',
+        value: task.name || 'Unnamed Task',
+      }));
+      
+      // If no active tasks at all
+      if (choices.length === 0 && activeTasks.length === 0) {
+        choices.push({
+          name: 'No active tasks available',
+          value: 'all', // Allow "all" as a fallback
+        });
+      }
+      // If no matches but user has typed something
+      else if (choices.length === 0 && userInput.length > 0) {
+        choices.push({
+          name: `No active tasks found matching "${userInput}"`,
+          value: userInput, // Return their input so they can still submit if needed
+        });
+      }
+      
+      await interaction.respond(choices);
+    } catch (error) {
+      console.error('Error in task complete autocomplete:', error);
+      // Respond with empty array on error to prevent Discord errors
+      await interaction.respond([]).catch(() => {
+        // Ignore errors if interaction already responded or expired
+      });
     }
   },
 };
