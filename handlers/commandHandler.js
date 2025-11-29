@@ -152,6 +152,61 @@ async function registerCommands(client) {
 }
 
 /**
+ * Routes an autocomplete interaction to the appropriate command handler
+ * @param {AutocompleteInteraction} interaction - The Discord autocomplete interaction
+ * @returns {Promise<void>}
+ */
+async function routeAutocomplete(interaction) {
+  if (!interaction.isAutocomplete()) return;
+
+  // Load commands if not already loaded
+  if (!interaction.client.commands) {
+    const { commands, commandMap } = loadCommands(interaction.client);
+    interaction.client.commands = commands;
+    interaction.client.commandMap = commandMap;
+  }
+
+  const commandMap = interaction.client.commandMap;
+  const subcommand = interaction.options.getSubcommand(false);
+  
+  let command;
+  if (subcommand) {
+    // This is a subcommand (e.g., /game create)
+    const groupName = interaction.commandName;
+    const commandKey = `${groupName}.${subcommand}`;
+    command = commandMap.get(commandKey);
+  } else {
+    // Standalone command (e.g., /task complete)
+    command = commandMap.get(interaction.commandName);
+  }
+
+  if (!command) {
+    console.error(`No command matching ${interaction.commandName}${subcommand ? ` ${subcommand}` : ''} was found for autocomplete.`);
+    await interaction.respond([]).catch(() => {
+      // Ignore errors if interaction already responded or expired
+    });
+    return;
+  }
+
+  // Check if command has an autocomplete handler
+  if (typeof command.autocomplete === 'function') {
+    try {
+      await command.autocomplete(interaction);
+    } catch (error) {
+      console.error(`Error executing autocomplete for ${interaction.commandName}${subcommand ? ` ${subcommand}` : ''}:`, error);
+      await interaction.respond([]).catch(() => {
+        // Ignore errors if interaction already responded or expired
+      });
+    }
+  } else {
+    // No autocomplete handler, respond with empty array
+    await interaction.respond([]).catch(() => {
+      // Ignore errors if interaction already responded or expired
+    });
+  }
+}
+
+/**
  * Routes an interaction to the appropriate command handler
  * @param {Interaction} interaction - The Discord interaction
  * @param {Collection} commands - Collection of loaded commands
@@ -196,4 +251,5 @@ module.exports = {
   loadCommands,
   registerCommands,
   routeInteraction,
+  routeAutocomplete,
 };
