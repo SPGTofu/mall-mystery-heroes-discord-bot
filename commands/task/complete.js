@@ -3,8 +3,7 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, completeTask, updateTask } = require('../../services/firebase/taskService');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateAliveRole, getOrCreateDeadRole } = require('../../services/discord/roles');
-const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer } = require('../../services/firebase/dbCallsAdapter');
+const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer, getPlayerByUserID } = require('../../services/firebase/dbCallsAdapter');
 const { ROLES } = require('../../config/roles');
 const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 
@@ -57,8 +56,6 @@ module.exports = {
 
       const taskNameInput = interaction.options.getString('task_name', true).trim();
       const playerUser = interaction.options.getUser('player');
-      // Broadcast option removed; always broadcast publicly
-      const shouldBroadcast = true;
 
       // Find task by name (case-insensitive, trimmed match)
       const tasks = await getAllTasks(interaction.guildId, interaction.guildId);
@@ -115,7 +112,7 @@ module.exports = {
         const gmChannel = await getOrCreateChannel(interaction.guild, CHANNELS.GAME_MASTERS).catch(() => null);
         if (gmChannel) await gmChannel.send({ embeds: [summaryEmbed] });
         const generalChannel = await getOrCreateChannel(interaction.guild, CHANNELS.GENERAL).catch(() => null);
-        if (shouldBroadcast && generalChannel) await generalChannel.send({ embeds: [summaryEmbed] });
+        if (generalChannel) await generalChannel.send({ embeds: [summaryEmbed] });
 
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
@@ -130,6 +127,43 @@ module.exports = {
 
       if (!found) {
         return await interaction.editReply({ content: `❌ Task not found: ${taskNameInput}`, ephemeral: true });
+      }
+
+      // Check if task is a revival task
+      const isRevivalTask = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
+
+      // If a player is provided, check if they're alive (unless it's a revival task)
+      if (playerUser) {
+        try {
+          const playerDoc = await getPlayerByUserID(playerUser.id, interaction.guildId);
+          if (!playerDoc) {
+            return await interaction.editReply({ 
+              content: `❌ Player ${playerUser.tag} is not in the game.` 
+            });
+          }
+
+          const playerData = playerDoc.data();
+          const isPlayerAlive = playerData.isAlive !== false; // Default to true if not set
+
+          // Dead players can only complete revival tasks
+          if (!isPlayerAlive && !isRevivalTask) {
+            return await interaction.editReply({ 
+              content: `❌ Dead players cannot complete tasks. Only revival tasks can be completed by dead players.` 
+            });
+          }
+
+          // Revival tasks can only be completed by dead players
+          if (isRevivalTask && isPlayerAlive) {
+            return await interaction.editReply({ 
+              content: `❌ Revival tasks can only be completed by dead players. ${playerUser.tag} is still alive.` 
+            });
+          }
+        } catch (error) {
+          console.error('Error checking player status:', error);
+          return await interaction.editReply({ 
+            content: `❌ Error checking player status: ${error.message}` 
+          });
+        }
       }
 
       // Allow single-task completion without specifying a player.
@@ -156,7 +190,7 @@ module.exports = {
 
       const remaining = Math.max(0, (found.maxCompleters || updatedTask.maxCompleters || 1) - (updatedTask.completers?.length || 0));
 
-      // Send public announcement to general (create if missing) when allowed by broadcast
+      // Send public announcement to general (create if missing)
       const generalChannel = await getOrCreateChannel(interaction.guild, CHANNELS.GENERAL).catch(err => {
         console.error('Unable to get or create general channel:', err);
         return null;
@@ -170,7 +204,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      if (shouldBroadcast && generalChannel) {
+      if (generalChannel) {
         // Only send the 'spots left' announcement when there are spots remaining.
         if (remaining > 0) {
           await generalChannel.send({ embeds: [publicEmbed] });
@@ -181,7 +215,7 @@ module.exports = {
 
       // If no spots left (task is now complete), announce completion publicly
       const taskIsComplete = updatedTask.isComplete === true || remaining === 0;
-      if (taskIsComplete && shouldBroadcast && generalChannel) {
+      if (taskIsComplete && generalChannel) {
         try {
           const completersArray = (updatedTask.completers || []).map(id => `<@${id}>`);
           const completersList = completersArray.length > 0 ? completersArray.join('\n') : 'No completers recorded.';
@@ -204,11 +238,9 @@ module.exports = {
       // Handle revival/points only when a player was provided.
       let pointsToAward = Number(updatedTask.points || found.points || 0);
       let newScore = null;
-      let isRevival = false;
       if (playerUser) {
-        isRevival = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
         try {
-          if (isRevival) {
+          if (isRevivalTask) {
             // For revival: set player as alive and reset points to 0
             try {
               await setIsAliveForPlayer(playerUser.id, true, interaction.guildId);
@@ -270,7 +302,7 @@ module.exports = {
           { name: 'Remaining Spots', value: `${remaining}` },
           { name: 'Points Awarded', value: `${pointsToAward} pts`, inline: true },
           { name: 'New Player Score', value: `${newScore !== null ? newScore : 'unknown'}`, inline: true },
-          { name: 'Revival', value: `${isRevival ? 'Yes' : 'No'}`, inline: true }
+          { name: 'Revival', value: `${isRevivalTask ? 'Yes' : 'No'}`, inline: true }
         )
         .setTimestamp();
 
