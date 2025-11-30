@@ -3,7 +3,6 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, completeTask, updateTask } = require('../../services/firebase/taskService');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateAliveRole, getOrCreateDeadRole } = require('../../services/discord/roles');
 const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer } = require('../../services/firebase/dbCallsAdapter');
 const { ROLES } = require('../../config/roles');
 const { getRoom } = require('../../services/firebase/dbCallsAdapter');
@@ -61,9 +60,9 @@ module.exports = {
     },
     {
       name: 'player',
-      description: 'The player to mark as completed (not required when task_name is "all")',
+      description: 'The player who completed the task',
       type: ApplicationCommandOptionType.User,
-      required: false,
+      required: true,
     },
   ],
 
@@ -169,23 +168,10 @@ module.exports = {
         return await interaction.editReply({ content: `❌ Task not found: ${taskNameInput}`, ephemeral: true });
       }
 
-      // Allow single-task completion without specifying a player.
-      // If no player is provided we will mark the task complete without awarding points.
-
-      // Attempt to complete task. If a player is provided, use completeTask
-      // to record the completer and trigger awarding/revival logic. If no
-      // player is provided, simply mark the task complete without awarding points.
+      // Attempt to complete task with the provided player
       let updatedTask;
       try {
-        if (playerUser) {
-          updatedTask = await completeTask(interaction.guildId, found.id, playerUser.id);
-        } else {
-          const now = new Date().toISOString();
-          await updateTask(interaction.guildId, found.id, { isComplete: true, completedAt: now });
-          // fetch fresh task state after update
-          const all = await getAllTasks(interaction.guildId);
-          updatedTask = all.find(t => t.id === found.id) || { ...found, isComplete: true };
-        }
+        updatedTask = await completeTask(interaction.guildId, found.id, playerUser.id);
       } catch (err) {
         console.error('Error completing task:', err);
         
@@ -245,57 +231,55 @@ module.exports = {
         }
       }
 
-      // Handle revival/points only when a player was provided.
+      // Handle revival/points
       let pointsToAward = Number(updatedTask.points || found.points || 0);
       let newScore = null;
-      let isRevival = false;
-      if (playerUser) {
-        isRevival = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
-        try {
-          if (isRevival) {
-            // For revival: set player as alive and reset points to 0
-            try {
-              await setIsAliveForPlayer(playerUser.id, true, interaction.guildId);
-            } catch (err) {
-              console.error('Failed to set player isAlive in DB:', err);
-            }
+      const isRevivalTask = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
+      
+      try {
+        if (isRevivalTask) {
+          // For revival: set player as alive and reset points to 0
+          try {
+            await setIsAliveForPlayer(playerUser.id, true, interaction.guildId);
+          } catch (err) {
+            console.error('Failed to set player isAlive in DB:', err);
+          }
 
-            try {
-              newScore = await setPointsForPlayer(playerUser.id, 0, interaction.guildId);
-              pointsToAward = 0; // no points awarded on revival
-            } catch (err) {
-              console.error('Failed to reset player points in DB:', err);
-            }
+          try {
+            newScore = await setPointsForPlayer(playerUser.id, 0, interaction.guildId);
+            pointsToAward = 0; // no points awarded on revival
+          } catch (err) {
+            console.error('Failed to reset player points in DB:', err);
+          }
 
-            // Adjust Discord roles: remove 'Dead', add 'Alive'
-            try {
-              const memberToUpdate = await interaction.guild.members.fetch(playerUser.id).catch(() => null);
-              if (memberToUpdate) {
-                const deadRole = interaction.guild.roles.cache.find(r => r.name === ROLES.DEAD);
-                const aliveRole = interaction.guild.roles.cache.find(r => r.name === ROLES.ALIVE);
-                if (deadRole && memberToUpdate.roles.cache.has(deadRole.id)) {
-                  await memberToUpdate.roles.remove(deadRole).catch(err => console.error('Failed to remove Dead role:', err));
-                }
-                if (aliveRole && !memberToUpdate.roles.cache.has(aliveRole.id)) {
-                  await memberToUpdate.roles.add(aliveRole).catch(err => console.error('Failed to add Alive role:', err));
-                }
+          // Adjust Discord roles: remove 'Dead', add 'Alive'
+          try {
+            const memberToUpdate = await interaction.guild.members.fetch(playerUser.id).catch(() => null);
+            if (memberToUpdate) {
+              const deadRole = interaction.guild.roles.cache.find(r => r.name === ROLES.DEAD);
+              const aliveRole = interaction.guild.roles.cache.find(r => r.name === ROLES.ALIVE);
+              if (deadRole && memberToUpdate.roles.cache.has(deadRole.id)) {
+                await memberToUpdate.roles.remove(deadRole).catch(err => console.error('Failed to remove Dead role:', err));
               }
-            } catch (err) {
-              console.error('Error updating Discord roles for revived player:', err);
+              if (aliveRole && !memberToUpdate.roles.cache.has(aliveRole.id)) {
+                await memberToUpdate.roles.add(aliveRole).catch(err => console.error('Failed to add Alive role:', err));
+              }
             }
-          } else {
-            // Normal task: award points
-            if (pointsToAward > 0) {
-              try {
-                newScore = await updatePointsForPlayer(playerUser.id, pointsToAward, interaction.guildId);
-              } catch (err) {
-                console.error('Failed to update player points:', err);
-              }
+          } catch (err) {
+            console.error('Error updating Discord roles for revived player:', err);
+          }
+        } else {
+          // Normal task: award points
+          if (pointsToAward > 0) {
+            try {
+              newScore = await updatePointsForPlayer(playerUser.id, pointsToAward, interaction.guildId);
+            } catch (err) {
+              console.error('Failed to update player points:', err);
             }
           }
-        } catch (err) {
-          console.error('Error handling points/isAlive logic:', err);
         }
+      } catch (err) {
+        console.error('Error handling points/isAlive logic:', err);
       }
 
       // Confirm to GMs in the game-masters channel
@@ -314,7 +298,7 @@ module.exports = {
           { name: 'Remaining Spots', value: `${remaining}` },
           { name: 'Points Awarded', value: `${pointsToAward} pts`, inline: true },
           { name: 'New Player Score', value: `${newScore !== null ? newScore : 'unknown'}`, inline: true },
-          { name: 'Revival', value: `${isRevival ? 'Yes' : 'No'}`, inline: true }
+          { name: 'Revival', value: `${isRevivalTask ? 'Yes' : 'No'}`, inline: true }
         )
         .setTimestamp();
 
