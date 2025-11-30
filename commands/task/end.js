@@ -19,6 +19,7 @@ module.exports = {
       description: 'The task name to end',
       type: ApplicationCommandOptionType.String,
       required: true,
+      autocomplete: true,
     },
   ],
 
@@ -32,7 +33,7 @@ module.exports = {
 
       const roomSnapshot = await getRoom(interaction.guildId);
       if (!roomSnapshot.exists) {
-        return await interaction.reply({ content: '❌ No game room exists. Create and start a game before ending tasks.', ephemeral: true });
+        return await interaction.reply({ content: 'No game exists yet. Use `/game create` and `/game start` before ending task.', ephemeral: true });
       }
 
       const roomData = roomSnapshot.data();
@@ -107,5 +108,55 @@ module.exports = {
       await interaction.reply({ content: `❌ An error occurred: ${error.message}`, ephemeral: true });
     }
   },
-};
 
+  async autocomplete(interaction) {
+    try {
+      const focusedOption = interaction.options.getFocused(true);
+
+      if (focusedOption.name !== 'task_name') {
+        await interaction.respond([]).catch(() => {});
+        return;
+      }
+
+      const userInput = focusedOption.value.toLowerCase().trim();
+      const tasks = await getAllTasks(interaction.guildId, interaction.guildId);
+      const activeTasks = tasks.filter(task => !task.isComplete);
+
+      let filteredTasks = activeTasks;
+      if (userInput.length > 0) {
+        filteredTasks = activeTasks.filter(task => {
+          const taskName = (task.name || '').toLowerCase();
+          return taskName.includes(userInput);
+        });
+      }
+
+      filteredTasks.sort((a, b) => {
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      const choices = filteredTasks.slice(0, 25).map(task => ({
+        name: task.name || 'Unnamed Task',
+        value: task.name || 'Unnamed Task',
+      }));
+
+      if (choices.length === 0 && activeTasks.length === 0) {
+        choices.push({
+          name: 'No active tasks available',
+          value: 'all',
+        });
+      } else if (choices.length === 0 && userInput.length > 0) {
+        choices.push({
+          name: `No active tasks found matching "${userInput}"`,
+          value: userInput,
+        });
+      }
+
+      await interaction.respond(choices);
+    } catch (error) {
+      console.error('Error in task end autocomplete:', error);
+      await interaction.respond([]).catch(() => {});
+    }
+  },
+};

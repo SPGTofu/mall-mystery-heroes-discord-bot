@@ -52,6 +52,10 @@ module.exports = {
       const playerDoc = await fetchPlayerForRoom(userID, roomID);
       const playerData = playerDoc.data();
       const dbPlayerName = playerData.name; // Use database name
+
+      if (playerData.isAlive === false) {
+        throw new GameError(`<@${targetUser.id}> cannot be placed in open season because they are dead.`);
+      }
       
       // Check if player already has open season (using data we already fetched)
       if (playerData.openSeason === true) {

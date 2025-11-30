@@ -67,7 +67,7 @@ module.exports = {
       // Check if room exists
       const roomSnapshot = await getRoom(roomID);
       if (!roomSnapshot.exists) {
-        throw new GameError('No game room exists. Please create a game first with /game create.');
+        throw new GameError('No game exists yet. Use `/game create` and `/game start` before ending game.');
       }
 
       const roomData = roomSnapshot.data();

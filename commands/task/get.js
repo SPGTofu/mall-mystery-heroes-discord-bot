@@ -31,7 +31,7 @@ module.exports = {
       const roomSnapshot = await getRoom(interaction.guildId);
       if (!roomSnapshot.exists) {
         return await interaction.reply({
-          content: '❌ No game room exists. Create and start a game before using /task commands.',
+          content: 'No game exists yet. Use `/game create` and `/game start` before using `/task` commands.',
           ephemeral: true,
         });
       }

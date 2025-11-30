@@ -53,7 +53,7 @@ module.exports = {
       const message = createErrorAnnouncement(`${sender} tried to revive ${playerToRevive}, but they are not a GM.`);
       await gmChannel.send({ embeds: [message]});
       const userError = createErrorAnnouncement('You are not a game master.');
-      return interaction.reply({ embeds: [userError] });
+      return interaction.reply({ embeds: [userError], ephemeral: true });
     }
 
     // Cannot revive someone already alive

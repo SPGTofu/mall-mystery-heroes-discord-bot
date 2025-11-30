@@ -42,6 +42,10 @@ module.exports = {
     if (!roomSnapshot.exists) {
       throw new GameError('No game has been created yet.');
     }
+    const roomData = roomSnapshot.data() || {};
+    if (!roomData.isGameActive) {
+      throw new GameError('The game has not started yet. Use `/game start` before unaliving.');
+    }
 
     // Only GM can mark unalive
     if (!hasRole(sender, ROLES.GAME_MASTER)) {
@@ -76,6 +80,7 @@ module.exports = {
       }
 
       const targetPlayerData = targetPlayerDoc.data();
+      const wasOpenSeason = targetPlayerData.openSeason === true;
       const targetDbName = targetPlayerData.name || playerToBeDead.username;
 
       await killPlayerForRoom(playerToBeDead.id, roomID);
@@ -101,6 +106,20 @@ module.exports = {
 
       if (gmChannel) {
         await gmChannel.send({ embeds: [eliminationEmbed] });
+      }
+
+      if (wasOpenSeason) {
+        const openSeasonEmbed = createAnnouncement(
+          '✅ Open Season Ended',
+          `Open season on **${targetDbName}** has ended because they have been eliminated.`
+        );
+
+        if (generalChannel) {
+          await generalChannel.send({ embeds: [openSeasonEmbed] });
+        }
+        if (gmChannel) {
+          await gmChannel.send({ embeds: [openSeasonEmbed] });
+        }
       }
 
       const dmsCategory = getDmsCategory(interaction.guild);
