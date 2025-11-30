@@ -3,10 +3,8 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, completeTask, updateTask } = require('../../services/firebase/taskService');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateAliveRole, getOrCreateDeadRole } = require('../../services/discord/roles');
-const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer } = require('../../services/firebase/dbCallsAdapter');
+const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer, getRoom, getPlayerByUserID } = require('../../services/firebase/dbCallsAdapter');
 const { ROLES } = require('../../config/roles');
-const { getRoom } = require('../../services/firebase/dbCallsAdapter');
 
 /**
  * Formats the "already completed task" error with a user-friendly message
@@ -61,7 +59,7 @@ module.exports = {
     },
     {
       name: 'player',
-      description: 'The player to mark as completed (not required when task_name is "all")',
+      description: 'The player who completed the task',
       type: ApplicationCommandOptionType.User,
       required: true,
     },
@@ -94,8 +92,6 @@ module.exports = {
 
       const taskNameInput = interaction.options.getString('task_name', true).trim();
       const playerUser = interaction.options.getUser('player');
-      // Broadcast option removed; always broadcast publicly
-      const shouldBroadcast = true;
 
       // Find task by name (case-insensitive, trimmed match)
       const tasks = await getAllTasks(interaction.guildId, interaction.guildId);
@@ -105,87 +101,53 @@ module.exports = {
 
       const normalized = taskNameInput.replace(/\s/g, '').toLowerCase();
 
-      // Special-case: 'all' -> mark all active tasks complete
-      if (normalized === 'all') {
-        // Mark all active tasks complete
-        const activeTasks = tasks.filter(t => !t.isComplete);
-        if (activeTasks.length === 0) {
-          return await interaction.editReply({ content: '✅ There are no active tasks to complete.', ephemeral: true });
-        }
-
-        const now = new Date().toISOString();
-        const updatePromises = activeTasks.map(t => updateTask(interaction.guildId, t.id, { isComplete: true, completedAt: now }));
-        const results = await Promise.allSettled(updatePromises);
-
-        // Build announcement embed summarizing completed tasks and completers
-        const summaryEmbed = new EmbedBuilder()
-          .setTitle('Tasks Marked Complete')
-          .setColor('#22AA66')
-          .setTimestamp();
-
-        for (const t of activeTasks) {
-          let completerList = 'No completers recorded.';
-          if (Array.isArray(t.completers) && t.completers.length) {
-            const names = [];
-            for (const c of t.completers) {
-              let display = null;
-              if (c.discordId) {
-                try {
-                  const m = await interaction.guild.members.fetch(c.discordId).catch(() => null);
-                  if (m) display = m.displayName;
-                } catch (e) {
-                  display = null;
-                }
-              }
-              if (!display) display = c.displayName || c.name || c.playerId || c.discordId || 'Unknown';
-              names.push(display);
-            }
-            completerList = names.join('\n');
-          }
-
-          const title = t.name || t.title || 'Untitled Task';
-          const desc = t.description ? (t.description.length > 1000 ? t.description.slice(0, 997) + '...' : t.description) : '';
-          const value = (desc ? desc + '\n\n' : '') + '**Completers:**\n' + completerList;
-          summaryEmbed.addFields({ name: title, value });
-        }
-
-        const gmChannel = await getOrCreateChannel(interaction.guild, CHANNELS.GAME_MASTERS).catch(() => null);
-        if (gmChannel) await gmChannel.send({ embeds: [summaryEmbed] });
-        const generalChannel = await getOrCreateChannel(interaction.guild, CHANNELS.GENERAL).catch(() => null);
-        if (shouldBroadcast && generalChannel) await generalChannel.send({ embeds: [summaryEmbed] });
-
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-        return await interaction.editReply({ content: `✅ Completed ${succeeded} task(s). ${failed ? `${failed} failed to update (see logs).` : ''}`, ephemeral: true });
-      }
       let found = tasks.find(t => (t.titleTrimmedLowerCase || (t.name || '').replace(/\s/g, '').toLowerCase()) === normalized || (t.name || '').toLowerCase() === taskNameInput.toLowerCase());
-
-      // If not exact match, try includes
-      if (!found) {
-        found = tasks.find(t => (t.name || '').toLowerCase().includes(taskNameInput.toLowerCase()));
-      }
 
       if (!found) {
         return await interaction.editReply({ content: `❌ Task not found: ${taskNameInput}`, ephemeral: true });
       }
 
-      // Allow single-task completion without specifying a player.
-      // If no player is provided we will mark the task complete without awarding points.
+      // Validate that the player is in the game
+      let playerDoc;
+      try {
+        playerDoc = await getPlayerByUserID(playerUser.id, interaction.guildId);
+        if (!playerDoc) {
+          return await interaction.editReply({ 
+            content: `❌ ${playerUser} is not a player in the game.` 
+          });
+        }
+      } catch (error) {
+        console.error('Error checking if player is in game:', error);
+        return await interaction.editReply({ 
+          content: `❌ Error checking player status: ${error.message}` 
+        });
+      }
 
-      // Attempt to complete task. If a player is provided, use completeTask
-      // to record the completer and trigger awarding/revival logic. If no
-      // player is provided, simply mark the task complete without awarding points.
+      // Check if task is a revival task
+      const isRevivalTask = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
+
+      // Get player status
+      const playerData = playerDoc.data();
+      const isPlayerAlive = playerData.isAlive !== false; // Default to true if not set
+
+      // Validate: Dead players can only complete revival tasks
+      if (!isPlayerAlive && !isRevivalTask) {
+        return await interaction.editReply({ 
+          content: `❌ Dead players cannot complete tasks. Only revival tasks can be completed by dead players.` 
+        });
+      }
+
+      // Validate: Revival tasks can only be completed by dead players
+      if (isRevivalTask && isPlayerAlive) {
+        return await interaction.editReply({ 
+          content: `❌ Revival tasks can only be completed by dead players. ${playerUser} is still alive.` 
+        });
+      }
+
+      // Attempt to complete task with the provided player
       let updatedTask;
       try {
-        if (playerUser) {
-          updatedTask = await completeTask(interaction.guildId, found.id, playerUser.id);
-        } else {
-          const now = new Date().toISOString();
-          await updateTask(interaction.guildId, found.id, { isComplete: true, completedAt: now });
-          // fetch fresh task state after update
-          const all = await getAllTasks(interaction.guildId);
-          updatedTask = all.find(t => t.id === found.id) || { ...found, isComplete: true };
-        }
+        updatedTask = await completeTask(interaction.guildId, found.id, playerUser.id);
       } catch (err) {
         console.error('Error completing task:', err);
         
@@ -214,7 +176,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      if (shouldBroadcast && generalChannel) {
+      if (generalChannel) {
         // Only send the 'spots left' announcement when there are spots remaining.
         if (remaining > 0) {
           await generalChannel.send({ embeds: [publicEmbed] });
@@ -225,7 +187,7 @@ module.exports = {
 
       // If no spots left (task is now complete), announce completion publicly
       const taskIsComplete = updatedTask.isComplete === true || remaining === 0;
-      if (taskIsComplete && shouldBroadcast && generalChannel) {
+      if (taskIsComplete && generalChannel) {
         try {
           const completersArray = (updatedTask.completers || []).map(id => `<@${id}>`);
           const completersList = completersArray.length > 0 ? completersArray.join('\n') : 'No completers recorded.';
@@ -245,57 +207,54 @@ module.exports = {
         }
       }
 
-      // Handle revival/points only when a player was provided.
+      // Handle revival/points
       let pointsToAward = Number(updatedTask.points || found.points || 0);
       let newScore = null;
-      let isRevival = false;
-      if (playerUser) {
-        isRevival = (found.type || '').toString().toLowerCase() === 'revival' || (found.type || '').toString().toLowerCase() === 'revive';
-        try {
-          if (isRevival) {
-            // For revival: set player as alive and reset points to 0
-            try {
-              await setIsAliveForPlayer(playerUser.id, true, interaction.guildId);
-            } catch (err) {
-              console.error('Failed to set player isAlive in DB:', err);
-            }
+      
+      try {
+        if (isRevivalTask) {
+          // For revival: set player as alive and reset points to 0
+          try {
+            await setIsAliveForPlayer(playerUser.id, true, interaction.guildId);
+          } catch (err) {
+            console.error('Failed to set player isAlive in DB:', err);
+          }
 
-            try {
-              newScore = await setPointsForPlayer(playerUser.id, 0, interaction.guildId);
-              pointsToAward = 0; // no points awarded on revival
-            } catch (err) {
-              console.error('Failed to reset player points in DB:', err);
-            }
+          try {
+            newScore = await setPointsForPlayer(playerUser.id, 0, interaction.guildId);
+            pointsToAward = 0; // no points awarded on revival
+          } catch (err) {
+            console.error('Failed to reset player points in DB:', err);
+          }
 
-            // Adjust Discord roles: remove 'Dead', add 'Alive'
-            try {
-              const memberToUpdate = await interaction.guild.members.fetch(playerUser.id).catch(() => null);
-              if (memberToUpdate) {
-                const deadRole = interaction.guild.roles.cache.find(r => r.name === ROLES.DEAD);
-                const aliveRole = interaction.guild.roles.cache.find(r => r.name === ROLES.ALIVE);
-                if (deadRole && memberToUpdate.roles.cache.has(deadRole.id)) {
-                  await memberToUpdate.roles.remove(deadRole).catch(err => console.error('Failed to remove Dead role:', err));
-                }
-                if (aliveRole && !memberToUpdate.roles.cache.has(aliveRole.id)) {
-                  await memberToUpdate.roles.add(aliveRole).catch(err => console.error('Failed to add Alive role:', err));
-                }
+          // Adjust Discord roles: remove 'Dead', add 'Alive'
+          try {
+            const memberToUpdate = await interaction.guild.members.fetch(playerUser.id).catch(() => null);
+            if (memberToUpdate) {
+              const deadRole = interaction.guild.roles.cache.find(r => r.name === ROLES.DEAD);
+              const aliveRole = interaction.guild.roles.cache.find(r => r.name === ROLES.ALIVE);
+              if (deadRole && memberToUpdate.roles.cache.has(deadRole.id)) {
+                await memberToUpdate.roles.remove(deadRole).catch(err => console.error('Failed to remove Dead role:', err));
               }
-            } catch (err) {
-              console.error('Error updating Discord roles for revived player:', err);
+              if (aliveRole && !memberToUpdate.roles.cache.has(aliveRole.id)) {
+                await memberToUpdate.roles.add(aliveRole).catch(err => console.error('Failed to add Alive role:', err));
+              }
             }
-          } else {
-            // Normal task: award points
-            if (pointsToAward > 0) {
-              try {
-                newScore = await updatePointsForPlayer(playerUser.id, pointsToAward, interaction.guildId);
-              } catch (err) {
-                console.error('Failed to update player points:', err);
-              }
+          } catch (err) {
+            console.error('Error updating Discord roles for revived player:', err);
+          }
+        } else {
+          // Normal task: award points
+          if (pointsToAward > 0) {
+            try {
+              newScore = await updatePointsForPlayer(playerUser.id, pointsToAward, interaction.guildId);
+            } catch (err) {
+              console.error('Failed to update player points:', err);
             }
           }
-        } catch (err) {
-          console.error('Error handling points/isAlive logic:', err);
         }
+      } catch (err) {
+        console.error('Error handling points/isAlive logic:', err);
       }
 
       // Confirm to GMs in the game-masters channel
@@ -314,7 +273,7 @@ module.exports = {
           { name: 'Remaining Spots', value: `${remaining}` },
           { name: 'Points Awarded', value: `${pointsToAward} pts`, inline: true },
           { name: 'New Player Score', value: `${newScore !== null ? newScore : 'unknown'}`, inline: true },
-          { name: 'Revival', value: `${isRevival ? 'Yes' : 'No'}`, inline: true }
+          { name: 'Revival', value: `${isRevivalTask ? 'Yes' : 'No'}`, inline: true }
         )
         .setTimestamp();
 
