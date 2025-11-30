@@ -7,10 +7,11 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { PermissionError, GameError, handleError } = require('../../utils/errors');
 const { createOrUpdateRoom, getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { deleteChannel, getOrCreateChannel } = require('../../services/discord/channels');
-const { getOrCreateGameMasterRole, getOrCreateAllRolesForRoom } = require('../../services/discord/roles');
+const { getOrCreateGameMasterRole, getOrCreateAllRolesForRoom, removeRole } = require('../../services/discord/roles');
 const { createEmbed } = require('../../services/discord/messages');
 const { MessageFlags } = require('discord.js');
 const CHANNELS = require('../../config/channels');
+const { ROLES } = require('../../config/roles');
 
 module.exports = {
   name: 'create',
@@ -110,6 +111,35 @@ module.exports = {
       // } catch (e) {
       //   console.error(e)
       // }
+
+      // Remove tracked roles from all members so the new game starts clean
+      await interaction.editReply('Removing previous player roles...');
+      const roleNamesToClear = [
+        ROLES.GAME_MASTER,
+        ROLES.PLAYER,
+        ROLES.ALIVE,
+        ROLES.DEAD,
+        ROLES.OPEN_SEASON
+      ];
+
+      const rolesToClear = roleNamesToClear
+        .map(roleName => guild.roles.cache.find(role => role.name === roleName))
+        .filter(Boolean);
+
+      if (rolesToClear.length > 0) {
+        const members = await guild.members.fetch();
+        for (const member of members.values()) {
+          for (const role of rolesToClear) {
+            if (member.roles.cache.has(role.id)) {
+              try {
+                await removeRole(member, role);
+              } catch (error) {
+                console.error(`Error removing role ${role.name} from ${member.user.tag}:`, error);
+              }
+            }
+          }
+        }
+      }
 
       // Get or create all roles
       const allRoles = await getOrCreateAllRolesForRoom(guild);
