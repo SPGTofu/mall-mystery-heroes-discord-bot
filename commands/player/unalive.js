@@ -42,6 +42,10 @@ module.exports = {
     if (!roomSnapshot.exists) {
       throw new GameError('No game has been created yet.');
     }
+    const roomData = roomSnapshot.data() || {};
+    if (!roomData.isGameActive) {
+      throw new GameError('The game has not started yet. Use `/game start` before unaliving.');
+    }
 
     // Only GM can mark unalive
     if (!hasRole(sender, ROLES.GAME_MASTER)) {

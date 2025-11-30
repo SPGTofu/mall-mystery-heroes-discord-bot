@@ -14,7 +14,8 @@ const { fetchTargetsForPlayer,
     updatePointsForPlayer,
     killPlayerForRoom,
     updateLogsForRoom,
-    fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
+    fetchPlayerByUserIdForRoom,
+    getRoom } = require('../../services/firebase/dbCallsAdapter');
 const { canPerformGMActions } = require('../../utils/permissions');
 const {
   getDmsCategory,
@@ -93,6 +94,20 @@ module.exports = {
       const guild = interaction.guild;
       const gmChannel = getChannel(guild, CHANNELS.GAME_MASTERS);
 
+      const roomSnapshot = await getRoom(roomID);
+      if (!roomSnapshot.exists) {
+        return interaction.editReply({
+          content: 'No game exists yet. Create and start a game before recording kills.',
+        });
+      }
+
+      const roomData = roomSnapshot.data() || {};
+      if (!roomData.isGameActive) {
+        return interaction.editReply({
+          content: 'The game has not started yet. Use `/game start` before recording kills.',
+        });
+      }
+
       // 3. Get the Discord guild members
       const assassinMember = await interaction.options.getMember('assassin');
       const targetMember = await interaction.options.getMember('target');
@@ -112,13 +127,13 @@ module.exports = {
       // 4. Check if @target and @assassin have 'Alive' roles
       if (!hasRole(assassinMember, ROLES.ALIVE)) {
         return interaction.editReply({
-          content: `${assassinName} is not alive.`,
+          content: `<@${assassin.id}> is not alive.`,
         });
       }
 
       if (!hasRole(targetMember, ROLES.ALIVE)) {
         return interaction.editReply({
-          content: `${targetName} is not alive.`,
+          content: `<@${target.id}> is not alive.`,
         });
       }
 
@@ -128,7 +143,7 @@ module.exports = {
         assassinPlayerDoc = await fetchPlayerByUserIdForRoom(assassin.id, roomID);
       } catch (error) {
         return interaction.editReply({
-          content: `Assassin (${assassinName}) is not registered in this game.`,
+          content: `Assassin (<@${assassin.id}>) is not registered in this game.`,
         });
       }
       
@@ -136,7 +151,7 @@ module.exports = {
         targetPlayerDoc = await fetchPlayerByUserIdForRoom(target.id, roomID);
       } catch (error) {
         return interaction.editReply({
-          content: `Target (${targetName}) is not registered in this game.`,
+          content: `Target (<@${target.id}>) is not registered in this game.`,
         });
       }
       

@@ -32,7 +32,7 @@ module.exports = {
 
       const roomSnapshot = await getRoom(interaction.guildId);
       if (!roomSnapshot.exists) {
-        return await interaction.reply({ content: '❌ No game room exists. Create and start a game before ending tasks.', ephemeral: true });
+        return await interaction.reply({ content: 'No game exists yet. Use `/game create` and `/game start` before ending task.', ephemeral: true });
       }
 
       const roomData = roomSnapshot.data();

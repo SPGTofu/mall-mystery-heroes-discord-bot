@@ -63,7 +63,7 @@ module.exports = {
       name: 'player',
       description: 'The player to mark as completed (not required when task_name is "all")',
       type: ApplicationCommandOptionType.User,
-      required: false,
+      required: true,
     },
   ],
 
