@@ -157,6 +157,7 @@ module.exports = {
       
       const assassinPlayerData = assassinPlayerDoc.data();
       const targetPlayerData = targetPlayerDoc.data();
+      const wasOpenSeason = targetPlayerData.openSeason === true;
       
       // Use database names (not Discord usernames) for consistency
       const assassinDbName = assassinPlayerData.name;
@@ -243,6 +244,20 @@ module.exports = {
 
       if (generalChannel) {
         await generalChannel.send({ embeds: [killEmbed] });
+      }
+
+      if (wasOpenSeason) {
+        const openSeasonEmbed = createAnnouncement(
+          '✅ Open Season Ended',
+          `Open season on **${targetDbName}** has ended because they have been eliminated.`
+        );
+
+        if (generalChannel) {
+          await generalChannel.send({ embeds: [openSeasonEmbed] });
+        }
+        if (gmChannel) {
+          await gmChannel.send({ embeds: [openSeasonEmbed] });
+        }
       }
 
       const dmsCategory = getDmsCategory(guild);
