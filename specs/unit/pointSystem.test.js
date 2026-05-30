@@ -4,12 +4,8 @@ const {
 } = require('../../services/game/pointSystem');
 
 describe('calculateKillPoints', () => {
-  it('returns half the victim points', () => {
-    expect(calculateKillPoints(100, 80)).toBe(40);
-  });
-
-  it('floors fractional results', () => {
-    expect(calculateKillPoints(0, 5)).toBe(2);
+  it('returns all of the victim points', () => {
+    expect(calculateKillPoints(100, 80)).toBe(80);
   });
 
   it('returns 0 when victim has 0 points', () => {
