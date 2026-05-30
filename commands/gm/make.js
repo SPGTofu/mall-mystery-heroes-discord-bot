@@ -8,7 +8,7 @@ const { canPerformAdminActions } = require('../../utils/permissions');
 const { PermissionError, ValidationError } = require('../../utils/errors');
 const { ROLES } = require('../../config/roles');
 const { getOrCreateRole } = require('../../services/discord/roles');
-const { getPlayerByUserID } = require('../../services/firebase/dbCallsAdapter');
+const { fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
 const { getChannel } = require('../../services/discord/channels');
 const CHANNELS = require('../../config/channels');
 const { createAnnouncement } = require('../../services/discord/messages');
@@ -51,9 +51,24 @@ module.exports = {
     // Prevent promoting active players to Game Masters
     const playerRole = guild.roles.cache.find(role => role.name === ROLES.PLAYER);
     const hasPlayerRole = playerRole ? targetMember.roles.cache.has(playerRole.id) : false;
-    const playerRecord = await getPlayerByUserID(targetMember.id, guild.id);
+    
+    // Check if user is a player in the game
+    try {
+      await fetchPlayerByUserIdForRoom(targetMember.id, guild.id);
+      // If we get here, the player exists in the game
+      throw new ValidationError('Players cannot be promoted to Game Master.');
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      // Only swallow "not found" — re-throw infrastructure errors
+      if (!error.message.includes('not found')) {
+        throw error;
+      }
+      // User is not a player, continue with promotion
+    }
 
-    if (hasPlayerRole || playerRecord) {
+    if (hasPlayerRole) {
       throw new ValidationError('Players cannot be promoted to Game Master.');
     }
 

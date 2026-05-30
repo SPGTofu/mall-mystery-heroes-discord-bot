@@ -4,7 +4,7 @@
  */
 
 const { GameError, handleError } = require('../../utils/errors');
-const { getRoom, getPlayerByUserID, removePlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
+const { getRoom, fetchPlayerByUserIdForRoom, removePlayerForRoom } = require('../../services/firebase/dbCallsAdapter');
 const { getOrCreatePlayerRole, getOrCreateAliveRole, getOrCreateDeadRole, removeRole } = require('../../services/discord/roles');
 const { deleteChannel } = require('../../services/discord/channels');
 const { MessageFlags } = require('discord.js');
@@ -30,8 +30,10 @@ module.exports = {
       }
 
       // Check if user is in the game
-      const playerDoc = await getPlayerByUserID(userID, roomID);
-      if (!playerDoc) {
+      let playerDoc;
+      try {
+        playerDoc = await fetchPlayerByUserIdForRoom(userID, roomID);
+      } catch (error) {
         throw new GameError('You are not in the game.');
       }
 

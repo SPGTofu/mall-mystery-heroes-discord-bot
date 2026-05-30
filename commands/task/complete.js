@@ -3,7 +3,7 @@ const { canPerformGMActions } = require('../../utils/permissions');
 const { getAllTasks, completeTask, updateTask } = require('../../services/firebase/taskService');
 const CHANNELS = require('../../config/channels');
 const { getOrCreateChannel } = require('../../services/discord/channels');
-const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer, getRoom, getPlayerByUserID } = require('../../services/firebase/dbCallsAdapter');
+const { updatePointsForPlayer, setPointsForPlayer, setIsAliveForPlayer, getRoom, fetchPlayerByUserIdForRoom } = require('../../services/firebase/dbCallsAdapter');
 const { ROLES } = require('../../config/roles');
 
 /**
@@ -110,16 +110,11 @@ module.exports = {
       // Validate that the player is in the game
       let playerDoc;
       try {
-        playerDoc = await getPlayerByUserID(playerUser.id, interaction.guildId);
-        if (!playerDoc) {
-          return await interaction.editReply({ 
-            content: `❌ ${playerUser} is not a player in the game.` 
-          });
-        }
+        playerDoc = await fetchPlayerByUserIdForRoom(playerUser.id, interaction.guildId);
       } catch (error) {
         console.error('Error checking if player is in game:', error);
         return await interaction.editReply({ 
-          content: `❌ Error checking player status: ${error.message}` 
+          content: `❌ ${playerUser} is not a player in the game.` 
         });
       }
 

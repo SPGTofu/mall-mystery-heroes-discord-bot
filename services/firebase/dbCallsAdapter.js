@@ -186,28 +186,6 @@ async function fetchAllPlayersWithScores(roomID) {
 }
 
 /**
- * Gets a player by user ID
- * @param {string} userID - Discord user ID
- * @param {string} roomID - Room ID
- * @returns {Promise<FirebaseFirestore.DocumentSnapshot|null>} Player document snapshot or null if not found
- */
-async function getPlayerByUserID(userID, roomID) {
-  try {
-    const playersRef = db.collection('rooms').doc(roomID).collection('players');
-    const snapshot = await playersRef.where('userID', '==', userID).get();
-    
-    if (snapshot.empty) {
-      return null;
-    }
-    
-    return snapshot.docs[0];
-  } catch (error) {
-    console.error('Error getting player by user ID:', error);
-    throw error;
-  }
-}
-
-/**
  * Fetches a player document based on Discord user ID
  * @param {string} userID - Discord user ID
  * @param {string} roomID - Room ID
@@ -1169,7 +1147,6 @@ module.exports = {
   fetchAllPlayersForRoom,
   setOpenSeasonForPlayer,
   checkOpenSeason,
-  getPlayerByUserID,
   removePlayerForRoom,
   generateAndAssignTargets,
   checkUserInOtherActiveGame,
