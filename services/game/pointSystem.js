@@ -10,9 +10,7 @@
  * @returns {number} Points to transfer
  */
 function calculateKillPoints(killerPoints, victimPoints) {
-  // TODO: Implement kill point calculation
-  // Typically: transfer all or a percentage of victim's points
-  return Math.floor(victimPoints * 0.5); // Placeholder
+  return victimPoints;
 }
 
 /**
